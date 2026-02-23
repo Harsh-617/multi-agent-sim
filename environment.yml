@@ -1,0 +1,12 @@
+name: multi-agent-sim
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - nodejs=18          # required for frontend (npm)
+  - pip:
+      # Install the package in editable mode with dev + training extras.
+      # This keeps pyproject.toml as the single source of truth.
+      - -e ".[dev,training]"
