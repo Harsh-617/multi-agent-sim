@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +11,14 @@ from pydantic import BaseModel, Field
 
 from simulation.agents import create_agent
 from simulation.agents.base import BaseAgent
+from simulation.config.defaults import default_config
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.core.seeding import derive_seed
 from simulation.envs.mixed import MixedEnvironment
+from simulation.evaluation.policy_set import resolve_policy_set
+from simulation.evaluation.reporting import write_robustness_report
+from simulation.evaluation.robustness import evaluate_robustness
+from simulation.evaluation.sweeps import build_default_sweeps
 from simulation.league.ratings import load_ratings, save_ratings, compute_ratings
 from simulation.league.registry import LeagueRegistry
 from simulation.metrics.collector import MetricsCollector
@@ -23,6 +29,7 @@ LEAGUE_ROOT = Path("storage/agents/league")
 RATINGS_PATH = LEAGUE_ROOT / "ratings.json"
 CONFIGS_DIR = Path("storage/configs")
 PPO_AGENT_DIR = Path("storage/agents/ppo_shared")
+REPORTS_ROOT = Path("storage/reports")
 
 _registry = LeagueRegistry(LEAGUE_ROOT)
 
@@ -171,6 +178,15 @@ class ChampionBenchmarkRequest(BaseModel):
     seed: int = Field(default=42)
 
 
+class ChampionRobustnessRequest(BaseModel):
+    config_id: str = Field(default="default")
+    seeds: int = Field(default=3, ge=1, le=20)
+    episodes_per_seed: int = Field(default=2, ge=1, le=10)
+    max_steps: int | None = Field(default=None, ge=1)
+    limit_sweeps: int | None = Field(default=None, ge=1)
+    seed: int = Field(default=42)
+
+
 def _run_episode_sync(
     config: MixedEnvironmentConfig,
     agent_policy: str,
@@ -316,3 +332,75 @@ async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
         results.append(res)
 
     return {"champion": champ, "results": results}
+
+
+# ------------------------------------------------------------------
+# Champion robustness evaluation
+# ------------------------------------------------------------------
+
+
+@router.post("/champion/robustness")
+async def champion_robustness(req: ChampionRobustnessRequest) -> dict:
+    """Run a robustness sweep for the league champion and save a report.
+
+    Returns the report_id (folder name) and report_path so the caller
+    can navigate to /reports/{report_id}.
+    """
+    # 1. Load config
+    if req.config_id == "default":
+        config = default_config()
+        config_dict = json.loads(config.model_dump_json())
+    else:
+        config_path = CONFIGS_DIR / f"{req.config_id}.json"
+        if not config_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Config '{req.config_id}' not found."
+            )
+        raw = config_path.read_text(encoding="utf-8")
+        config = MixedEnvironmentConfig.model_validate_json(raw)
+        config_dict = json.loads(raw)
+
+    # 2. Find champion (uses _DEFAULT_RATING if ratings file is absent)
+    members = _registry.list_members()
+    if not members:
+        raise HTTPException(status_code=404, detail="No league members exist.")
+    ratings = _ratings_map()
+    champ = _find_champion(members, ratings)
+    if champ is None:
+        raise HTTPException(status_code=404, detail="No league members exist.")
+
+    # 3. Build policy set: champion + baselines + ppo_shared (top_k=0
+    #    avoids duplicate top-k entries; champion is included separately)
+    specs = resolve_policy_set(
+        league_root=LEAGUE_ROOT,
+        ratings_path=RATINGS_PATH,
+        ppo_dir=PPO_AGENT_DIR,
+        top_k=0,
+    )
+
+    # 4. Build and optionally cap sweeps
+    sweeps = build_default_sweeps()
+    if req.limit_sweeps is not None:
+        sweeps = sweeps[: req.limit_sweeps]
+
+    # 5. Derive seed list from base seed
+    seeds = [req.seed + i for i in range(req.seeds)]
+
+    # 6. Run robustness evaluation
+    result = evaluate_robustness(
+        config,
+        specs,
+        sweeps,
+        seeds=seeds,
+        episodes_per_seed=req.episodes_per_seed,
+        max_steps_override=req.max_steps,
+    )
+
+    # 7. Persist report
+    report_dir = write_robustness_report(
+        result,
+        config_dict=config_dict,
+        report_root=REPORTS_ROOT,
+    )
+
+    return {"report_id": report_dir.name, "report_path": str(report_dir)}
