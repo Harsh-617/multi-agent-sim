@@ -7,6 +7,12 @@ storage/agents/*
 storage/agents/league/*
 !storage/agents/league/.gitkeep
 
+# Reports (generated evaluation artifacts)
+storage/reports/*
+storage/pipelines/*
+!storage/reports/.gitkeep
+!storage/pipelines/.gitkeep
+
 # Python
 __pycache__/
 *.pyc
@@ -46,7 +52,3 @@ frontend/out/
 # OS
 .DS_Store
 Thumbs.db
-
-# Reports (generated evaluation artifacts)
-storage/reports/*
-!storage/reports/.gitkeep
