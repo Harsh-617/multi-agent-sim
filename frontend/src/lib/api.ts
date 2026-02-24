@@ -398,6 +398,39 @@ export function getReportStrategies(reportId: string): Promise<StrategyResponse>
 }
 
 // ---------------------------------------------------------------------------
+// League Evolution
+// ---------------------------------------------------------------------------
+
+export interface LeagueEvolutionMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  rating: number;
+  label: string;
+  cluster_id: number | null;
+  robustness_score: number | null;
+}
+
+export interface ChampionHistoryEntry {
+  member_id: string;
+  created_at: string | null;
+  rating: number;
+  label: string;
+  cluster_id: number | null;
+  robustness_score: number | null;
+}
+
+export interface LeagueEvolutionResponse {
+  members: LeagueEvolutionMember[];
+  champion_history: ChampionHistoryEntry[];
+}
+
+export function getLeagueEvolution(): Promise<LeagueEvolutionResponse> {
+  return json(`${BASE}/league/evolution`);
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 

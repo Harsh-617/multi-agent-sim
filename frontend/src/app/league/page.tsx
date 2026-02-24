@@ -7,9 +7,11 @@ import {
   LeagueMember,
   LeagueRating,
   LineageMember,
+  LeagueEvolutionResponse,
   listLeagueMembers,
   getLeagueRatings,
   getLeagueLineage,
+  getLeagueEvolution,
   recomputeLeagueRatings,
   listConfigs,
   startRun,
@@ -18,8 +20,9 @@ import {
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
 import ChampionRobustness from "@/components/ChampionRobustness";
+import LeagueEvolution from "@/components/LeagueEvolution";
 
-type Tab = "members" | "lineage" | "benchmark" | "robustness";
+type Tab = "members" | "lineage" | "benchmark" | "robustness" | "evolution";
 
 export default function LeaguePage() {
   const router = useRouter();
@@ -28,6 +31,10 @@ export default function LeaguePage() {
   const [lineageMembers, setLineageMembers] = useState<LineageMember[]>([]);
   const [ratings, setRatings] = useState<Map<string, number>>(new Map());
   const [configs, setConfigs] = useState<ConfigListItem[]>([]);
+  const [evolutionData, setEvolutionData] = useState<LeagueEvolutionResponse>({
+    members: [],
+    champion_history: [],
+  });
   const [loading, setLoading] = useState(true);
   const [recomputing, setRecomputing] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
@@ -37,16 +44,18 @@ export default function LeaguePage() {
     setLoading(true);
     setError(null);
     try {
-      const [m, r, c, lin] = await Promise.all([
+      const [m, r, c, lin, evo] = await Promise.all([
         listLeagueMembers(),
         getLeagueRatings(),
         listConfigs(),
         getLeagueLineage(),
+        getLeagueEvolution(),
       ]);
       setMembers(m);
       setRatings(new Map(r.map((x) => [x.member_id, x.rating])));
       setConfigs(c);
       setLineageMembers(lin.members);
+      setEvolutionData(evo);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -136,6 +145,9 @@ export default function LeaguePage() {
         <button className={tabClass("robustness")} onClick={() => setTab("robustness")}>
           Robustness
         </button>
+        <button className={tabClass("evolution")} onClick={() => setTab("evolution")}>
+          Evolution
+        </button>
       </div>
 
       {loading ? (
@@ -221,6 +233,11 @@ export default function LeaguePage() {
             ) : (
               <ChampionRobustness configs={configs} />
             )
+          )}
+
+          {/* Evolution tab */}
+          {tab === "evolution" && (
+            <LeagueEvolution data={evolutionData} />
           )}
         </>
       )}
