@@ -31,6 +31,7 @@ RATINGS_PATH = LEAGUE_ROOT / "ratings.json"
 CONFIGS_DIR = Path("storage/configs")
 PPO_AGENT_DIR = Path("storage/agents/ppo_shared")
 REPORTS_ROOT = Path("storage/reports")
+REPORTS_DIR = REPORTS_ROOT
 
 _registry = LeagueRegistry(LEAGUE_ROOT)
 
@@ -342,10 +343,10 @@ async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
 
 def _load_newest_robustness_report() -> dict | None:
     """Load the newest robustness report JSON, or None if unavailable."""
-    if not REPORTS_ROOT.exists():
+    if not REPORTS_DIR.exists():
         return None
     robust_dirs = [
-        d for d in REPORTS_ROOT.iterdir()
+        d for d in REPORTS_DIR.iterdir()
         if d.is_dir() and d.name.startswith("robust_")
     ]
     if not robust_dirs:
