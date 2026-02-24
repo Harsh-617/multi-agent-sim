@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from simulation.agents import create_agent
 from simulation.agents.base import BaseAgent
+from simulation.analysis.strategy_clustering import cluster_policies
 from simulation.config.defaults import default_config
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.core.seeding import derive_seed
@@ -335,6 +336,164 @@ async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
 
 
 # ------------------------------------------------------------------
+# Evolution endpoint helpers
+# ------------------------------------------------------------------
+
+
+def _load_newest_robustness_report() -> dict | None:
+    """Load the newest robustness report JSON, or None if unavailable."""
+    if not REPORTS_ROOT.exists():
+        return None
+    robust_dirs = [
+        d for d in REPORTS_ROOT.iterdir()
+        if d.is_dir() and d.name.startswith("robust_")
+    ]
+    if not robust_dirs:
+        return None
+    newest = max(robust_dirs, key=lambda d: d.stat().st_mtime)
+    report_path = newest / "report.json"
+    if not report_path.exists():
+        return None
+    try:
+        return json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _champion_robustness_score_from_report(report: dict | None) -> float | None:
+    """Extract robustness_score for 'league_champion' from a robustness report."""
+    if report is None:
+        return None
+    section = report.get("per_policy_robustness") or {}
+    entry = section.get("league_champion")
+    if entry is not None:
+        return entry.get("robustness_score")
+    return None
+
+
+def _null_features() -> dict:
+    return {
+        "mean_return": None,
+        "worst_case_return": None,
+        "collapse_rate": None,
+        "mean_final_pool": None,
+        "robustness_score": None,
+    }
+
+
+def _evolution_clusters_and_labels(
+    members: list[dict],
+    ratings: dict[str, float],
+) -> tuple[dict[str, int], dict[int, str]]:
+    """Cluster members by Elo rating and assign deterministic labels.
+
+    Uses existing cluster_policies() with rating as the sole feature (mean_return
+    proxy), then labels clusters by mean rating:
+      - Highest mean-rating cluster  -> "Champion"
+      - Lowest mean-rating cluster   -> "Developing"
+      - Intermediate clusters        -> "Competitive"
+    """
+    if not members:
+        return {}, {}
+
+    # Build synthetic PolicyFeatures: rating as mean_return, rest null.
+    synthetic_features: dict[str, dict] = {
+        m["member_id"]: {
+            "mean_return": ratings.get(m["member_id"], _DEFAULT_RATING),
+            "worst_case_return": None,
+            "collapse_rate": None,
+            "mean_final_pool": None,
+            "robustness_score": None,
+        }
+        for m in members
+    }
+
+    clusters = cluster_policies(synthetic_features)  # {member_id: cluster_id}
+    unique_clusters = sorted(set(clusters.values()))
+
+    # Compute mean Elo per cluster for label assignment.
+    cluster_mean: dict[int, float] = {}
+    for cid in unique_clusters:
+        grp = [mid for mid, c in clusters.items() if c == cid]
+        cluster_mean[cid] = (
+            sum(ratings.get(m, _DEFAULT_RATING) for m in grp) / len(grp)
+            if grp else _DEFAULT_RATING
+        )
+
+    ordered = sorted(unique_clusters, key=lambda c: cluster_mean[c])
+    if len(ordered) == 1:
+        label_map: dict[int, str] = {ordered[0]: "Champion"}
+    elif len(ordered) == 2:
+        label_map = {ordered[0]: "Developing", ordered[1]: "Champion"}
+    else:
+        label_map = {ordered[0]: "Developing", ordered[-1]: "Champion"}
+        for cid in ordered[1:-1]:
+            label_map[cid] = "Competitive"
+
+    return clusters, label_map
+
+
+# ------------------------------------------------------------------
+# Evolution endpoint
+# ------------------------------------------------------------------
+
+
+@router.get("/evolution")
+async def get_evolution() -> dict:
+    """Return league lineage enriched with strategy labels and Elo ratings."""
+    members = _registry.list_members()
+    ratings = _ratings_map()
+
+    # Load robustness data once per request.
+    report = _load_newest_robustness_report()
+    champ_rob_score = _champion_robustness_score_from_report(report)
+
+    # Identify current champion for robustness_score assignment.
+    champ = _find_champion(members, ratings)
+    champ_id = champ["member_id"] if champ else None
+
+    # Rating-based clustering (deterministic fallback when no eval reports exist).
+    clusters, label_map = _evolution_clusters_and_labels(members, ratings)
+
+    # members sorted by member_id ascending (stable lexicographic order).
+    result_members: list[dict] = []
+    for m in sorted(members, key=lambda x: x["member_id"]):
+        mid = m["member_id"]
+        r = ratings.get(mid, _DEFAULT_RATING)
+        cid = clusters.get(mid, 0)
+        label = label_map.get(cid, "Developing")
+        result_members.append({
+            "member_id": mid,
+            "parent_id": m.get("parent_id"),
+            "created_at": m.get("created_at"),
+            "notes": m.get("notes"),
+            "rating": r,
+            "strategy": {
+                "cluster_id": cid,
+                "label": label,
+                "features": _null_features(),
+            },
+            "robustness_score": champ_rob_score if mid == champ_id else None,
+        })
+
+    # champion_history: all members sorted by created_at ascending.
+    champion_history: list[dict] = []
+    for m in sorted(members, key=lambda x: x.get("created_at") or ""):
+        mid = m["member_id"]
+        r = ratings.get(mid, _DEFAULT_RATING)
+        cid = clusters.get(mid, 0)
+        label = label_map.get(cid, "Developing")
+        champion_history.append({
+            "member_id": mid,
+            "created_at": m.get("created_at"),
+            "rating": r,
+            "label": label,
+            "cluster_id": cid,
+            "robustness_score": champ_rob_score if mid == champ_id else None,
+        })
+
+    return {"members": result_members, "champion_history": champion_history}
+
 # Champion robustness evaluation
 # ------------------------------------------------------------------
 
