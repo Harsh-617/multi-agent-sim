@@ -421,3 +421,101 @@ class TestChampionBenchmark:
         assert resp.status_code == 200
         policies = [r["policy"] for r in resp.json()["results"]]
         assert "ppo_shared" in policies
+
+
+# ── Champion robustness endpoint tests ────────────────────────────
+
+
+class TestChampionRobustness:
+    @pytest.fixture(autouse=True)
+    def _patch_reports(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Redirect report output to tmp_path for test isolation."""
+        import backend.api.routes_league as rl
+
+        monkeypatch.setattr(rl, "REPORTS_ROOT", tmp_path / "reports")
+
+    def test_no_members_returns_404(self, client: TestClient):
+        resp = client.post(
+            "/api/league/champion/robustness",
+            json={"config_id": "default", "seeds": 1, "episodes_per_seed": 1,
+                  "limit_sweeps": 1, "seed": 42},
+        )
+        assert resp.status_code == 404
+        assert "No league members" in resp.json()["detail"]
+
+    def test_missing_ratings_still_succeeds(
+        self,
+        client: TestClient,
+        league_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """No ratings.json → champion selected by creation date; evaluation proceeds."""
+        _make_fake_member(league_dir, "league_000001")
+
+        from simulation.agents.random_agent import RandomAgent
+        import simulation.evaluation.evaluator as ev_mod
+
+        monkeypatch.setattr(ev_mod, "create_agent", lambda p, **kw: RandomAgent())
+
+        resp = client.post(
+            "/api/league/champion/robustness",
+            json={"config_id": "default", "seeds": 1, "episodes_per_seed": 1,
+                  "limit_sweeps": 1, "seed": 42},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "report_id" in data
+        assert data["report_id"].startswith("robust_")
+
+    def test_success_path_produces_report_json(
+        self,
+        client: TestClient,
+        league_dir: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Valid member + ratings → report.json is written under REPORTS_ROOT."""
+        _make_fake_member(league_dir, "league_000001")
+        # Write a ratings file so the champion is deterministic
+        import json as _json
+        (league_dir / "ratings.json").write_text(
+            _json.dumps([{"member_id": "league_000001", "rating": 1050.0}]),
+            encoding="utf-8",
+        )
+
+        from simulation.agents.random_agent import RandomAgent
+        import simulation.evaluation.evaluator as ev_mod
+
+        monkeypatch.setattr(ev_mod, "create_agent", lambda p, **kw: RandomAgent())
+
+        resp = client.post(
+            "/api/league/champion/robustness",
+            json={"config_id": "default", "seeds": 1, "episodes_per_seed": 1,
+                  "limit_sweeps": 1, "seed": 42},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        report_id = data["report_id"]
+
+        # report.json must exist under the isolated reports root
+        import backend.api.routes_league as rl
+        report_json = rl.REPORTS_ROOT / report_id / "report.json"
+        assert report_json.exists(), f"report.json not found at {report_json}"
+
+        report_data = _json.loads(report_json.read_text(encoding="utf-8"))
+        assert report_data["report_id"] == report_id
+        assert "per_policy_robustness" in report_data
+
+    def test_bad_config_returns_404(
+        self,
+        client: TestClient,
+        league_dir: Path,
+    ):
+        _make_fake_member(league_dir, "league_000001")
+        resp = client.post(
+            "/api/league/champion/robustness",
+            json={"config_id": "nonexistent", "seeds": 1, "episodes_per_seed": 1,
+                  "limit_sweeps": 1, "seed": 42},
+        )
+        assert resp.status_code == 404
+        assert "nonexistent" in resp.json()["detail"]
