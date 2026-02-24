@@ -326,6 +326,32 @@ export function runChampionBenchmark(
   });
 }
 
+// Champion robustness
+
+export interface ChampionRobustnessRequest {
+  config_id: string;
+  seeds?: number;
+  episodes_per_seed?: number;
+  max_steps?: number | null;
+  limit_sweeps?: number | null;
+  seed?: number;
+}
+
+export interface ChampionRobustnessResponse {
+  report_id: string;
+  report_path: string;
+}
+
+export function runChampionRobustness(
+  payload: ChampionRobustnessRequest,
+): Promise<ChampionRobustnessResponse> {
+  return json(`${BASE}/league/champion/robustness`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Reports
 // ---------------------------------------------------------------------------

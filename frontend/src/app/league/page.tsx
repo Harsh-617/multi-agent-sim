@@ -17,8 +17,9 @@ import {
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
+import ChampionRobustness from "@/components/ChampionRobustness";
 
-type Tab = "members" | "lineage" | "benchmark";
+type Tab = "members" | "lineage" | "benchmark" | "robustness";
 
 export default function LeaguePage() {
   const router = useRouter();
@@ -132,6 +133,9 @@ export default function LeaguePage() {
         <button className={tabClass("benchmark")} onClick={() => setTab("benchmark")}>
           Champion Benchmark
         </button>
+        <button className={tabClass("robustness")} onClick={() => setTab("robustness")}>
+          Robustness
+        </button>
       </div>
 
       {loading ? (
@@ -205,6 +209,17 @@ export default function LeaguePage() {
               </p>
             ) : (
               <ChampionBenchmark configs={configs} />
+            )
+          )}
+
+          {/* Robustness tab */}
+          {tab === "robustness" && (
+            members.length === 0 ? (
+              <p className="text-gray-500">
+                No league members yet. Train a policy and save a snapshot to get started.
+              </p>
+            ) : (
+              <ChampionRobustness configs={configs} />
             )
           )}
         </>
