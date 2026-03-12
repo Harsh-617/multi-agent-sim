@@ -58,9 +58,9 @@ The following deployment-readiness issues were fixed in PR #10:
 
 | ID | Description | Status | GitHub Issue |
 |----|-------------|--------|--------------|
-| L1 | `POST /api/league/ratings/recompute` returns an empty list with no explanation when fewer than 2 league members exist | Open | TBD |
-| L2 | PyTorch and NumPy versions are not co-pinned between `pyproject.toml` and `environment.yml` — version drift likely across install methods | Open | TBD |
-| L3 | Observation dict in the `routes_league` inline episode runner is populated from `env.reset()` but not re-validated against `env.active_agents()` — mismatch possible | Open | TBD |
+| L1 | `POST /api/league/ratings/recompute` returns an empty list with no explanation when fewer than 2 league members exist | Fixed — HTTP 409 with descriptive message | TBD |
+| L2 | PyTorch and NumPy versions are not co-pinned between `pyproject.toml` and `environment.yml` — version drift likely across install methods | Fixed — numpy pinned in conda section of environment.yml | TBD |
+| L3 | Observation dict in the `routes_league` inline episode runner is populated from `env.reset()` but not re-validated against `env.active_agents()` — mismatch possible | Fixed — observations built from active_agents() keyset after reset | TBD |
 | L4 | Storage subdirectories are created lazily per-request rather than at server startup — first request to each endpoint races with `mkdir` | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
 
 ---
