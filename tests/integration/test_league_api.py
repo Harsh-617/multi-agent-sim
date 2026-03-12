@@ -280,9 +280,10 @@ class TestLeagueLineage:
 
 
 class TestLeagueChampion:
-    def test_champion_no_members_returns_404(self, client: TestClient):
+    def test_champion_no_members_returns_empty(self, client: TestClient):
         resp = client.get("/api/league/champion")
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert resp.json().get("member_id") is None
 
     def test_champion_returns_highest_rated(
         self, client: TestClient, league_dir: Path

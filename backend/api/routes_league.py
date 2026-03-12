@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -154,11 +155,11 @@ async def get_champion() -> dict:
     """Return the highest-rated league member."""
     members = _registry.list_members()
     if not members:
-        raise HTTPException(status_code=404, detail="No league members exist.")
+        return {"member_id": None}
     ratings = _ratings_map()
     champ = _find_champion(members, ratings)
     if champ is None:
-        raise HTTPException(status_code=404, detail="No league members exist.")
+        return {"member_id": None}
     return champ
 
 
@@ -309,19 +310,20 @@ async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
 
     # Champion
     member_dir = _registry.load_member(champ["member_id"])
-    champ_result = _benchmark_policy(
+    champ_result = await asyncio.to_thread(
+        _benchmark_policy,
         config,
         "league_snapshot",
         req.episodes,
         req.seed,
-        agent_kwargs={"member_dir": str(member_dir)},
+        {"member_dir": str(member_dir)},
     )
     champ_result["policy"] = "league_champion"
     results.append(champ_result)
 
     # Baselines
     for policy in _BASELINE_POLICIES:
-        res = _benchmark_policy(config, policy, req.episodes, req.seed)
+        res = await asyncio.to_thread(_benchmark_policy, config, policy, req.episodes, req.seed)
         res["policy"] = policy
         results.append(res)
 
@@ -329,7 +331,7 @@ async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
     if (PPO_AGENT_DIR / "policy.pt").exists() and (
         PPO_AGENT_DIR / "metadata.json"
     ).exists():
-        res = _benchmark_policy(config, "ppo_shared", req.episodes, req.seed)
+        res = await asyncio.to_thread(_benchmark_policy, config, "ppo_shared", req.episodes, req.seed)
         res["policy"] = "ppo_shared"
         results.append(res)
 
@@ -547,7 +549,8 @@ async def champion_robustness(req: ChampionRobustnessRequest) -> dict:
     seeds = [req.seed + i for i in range(req.seeds)]
 
     # 6. Run robustness evaluation
-    result = evaluate_robustness(
+    result = await asyncio.to_thread(
+        evaluate_robustness,
         config,
         specs,
         sweeps,
