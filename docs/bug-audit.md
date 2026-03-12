@@ -2,6 +2,8 @@
 
 This document tracks issues identified during the deployment-readiness audit of the multi-agent simulation platform. Each issue is assigned an ID, a brief description, a current status, and a corresponding GitHub issue number when available.
 
+> **All deployment-readiness issues identified in the audit have now been resolved.**
+
 ---
 
 ## Recently Resolved
@@ -13,6 +15,11 @@ The following deployment-readiness issues were fixed in PR #8:
 - C4 — empty league champion endpoint returning 404
 - C5 — hardcoded backend URL in Next.js config
 - M5 — shared_pool initialization in benchmark runner verified safe
+
+The following deployment-readiness issues were fixed in PR #13 / Branch: fix/event-loop-and-report-sorting:
+
+- M1 — ratings recompute blocking the event loop
+- M4 — fragile report timestamp sorting
 
 The following deployment-readiness issues were fixed in PR #12 / Branch: fix/minor-runtime-cleanups:
 
@@ -50,10 +57,10 @@ The following deployment-readiness issues were fixed in PR #10:
 
 | ID | Description | Status | GitHub Issue |
 |----|-------------|--------|--------------|
-| M1 | `compute_ratings` called synchronously inside `POST /api/league/ratings/recompute` — blocks the event loop for the duration of the match simulations | Fixed — wrapped in asyncio.to_thread | TBD |
+| M1 | `compute_ratings` called synchronously inside `POST /api/league/ratings/recompute` — blocks the event loop for the duration of the match simulations | Fixed — Resolved in PR: #13 / Branch: fix/event-loop-and-report-sorting | TBD |
 | M2 | `report_id` path parameter is used directly in a `Path` join without validation — path traversal risk | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
 | M3 | All storage paths are relative to the server's working directory — fails silently when `uvicorn` is started from a directory other than the repo root | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
-| M4 | `list_reports` sorts by `timestamp` string; reports with a missing `timestamp` field default to `""` and sort incorrectly | Fixed — sort key parses to datetime with fallback to epoch min | TBD |
+| M4 | `list_reports` sorts by `timestamp` string; reports with a missing `timestamp` field default to `""` and sort incorrectly | Fixed — Resolved in PR: #13 / Branch: fix/event-loop-and-report-sorting | TBD |
 | M5 | Same uninitialized `shared_pool` bug as C1 exists in the benchmark episode runner inside `routes_league.py` | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | M6 | `LeagueRegistry` is instantiated at module level on a path that may not exist — fragile on a fresh install if the registry does not create the directory in `__init__` | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
 | M7 | `connectMetrics` has no reconnection logic — a transient WebSocket disconnect silently stops the live metrics chart with no user feedback | Fixed — Resolved in PR: #11 / Branch: fix/frontend-ws-resilience | TBD |
