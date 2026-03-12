@@ -11,10 +11,11 @@ from fastapi import APIRouter, HTTPException
 from simulation.config.schema import MixedEnvironmentConfig
 
 from backend.schemas.api_models import ConfigCreatedResponse, ConfigListItem
+from backend.storage_root import STORAGE_ROOT
 
 router = APIRouter(prefix="/api/configs", tags=["configs"])
 
-CONFIGS_DIR = Path("storage/configs")
+CONFIGS_DIR = STORAGE_ROOT / "configs"
 
 
 def _configs_dir() -> Path:

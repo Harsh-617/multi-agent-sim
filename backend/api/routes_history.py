@@ -15,11 +15,12 @@ from backend.registry.run_registry import RunRegistry
 from backend.runner.experiment_runner import run_experiment
 from backend.runner.run_manager import RunManager
 from backend.schemas.api_models import BenchmarkRequest
+from backend.storage_root import STORAGE_ROOT
 
 router = APIRouter(prefix="/api", tags=["history"])
 
-RUNS_DIR = Path("storage/runs")
-CONFIGS_DIR = Path("storage/configs")
+RUNS_DIR = STORAGE_ROOT / "runs"
+CONFIGS_DIR = STORAGE_ROOT / "configs"
 
 
 def _registry() -> RunRegistry:

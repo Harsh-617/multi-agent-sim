@@ -15,13 +15,14 @@ from simulation.league.registry import LeagueRegistry
 from backend.runner.experiment_runner import run_experiment
 from backend.runner.run_manager import manager
 from backend.schemas.api_models import RunStatus, StartRunRequest, StartRunResponse
+from backend.storage_root import STORAGE_ROOT
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
-CONFIGS_DIR = Path("storage/configs")
-RUNS_DIR = Path("storage/runs")
-PPO_AGENT_DIR = Path("storage/agents/ppo_shared")
-LEAGUE_ROOT = Path("storage/agents/league")
+CONFIGS_DIR = STORAGE_ROOT / "configs"
+RUNS_DIR = STORAGE_ROOT / "runs"
+PPO_AGENT_DIR = STORAGE_ROOT / "agents/ppo_shared"
+LEAGUE_ROOT = STORAGE_ROOT / "agents/league"
 
 
 @router.post("/start", response_model=StartRunResponse)

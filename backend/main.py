@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from backend.api.routes_config import router as config_router
@@ -11,8 +13,27 @@ from backend.api.routes_league import router as league_router
 from backend.api.routes_pipeline import router as pipeline_router
 from backend.api.routes_reports import router as reports_router
 from backend.api.ws_metrics import router as ws_router
+from backend.storage_root import STORAGE_ROOT
 
-app = FastAPI(title="Multi-Agent Simulation", version="0.1.0")
+_STORAGE_DIRS = [
+    STORAGE_ROOT,
+    STORAGE_ROOT / "configs",
+    STORAGE_ROOT / "runs",
+    STORAGE_ROOT / "reports",
+    STORAGE_ROOT / "pipelines",
+    STORAGE_ROOT / "agents",
+    STORAGE_ROOT / "agents" / "league",
+]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for d in _STORAGE_DIRS:
+        d.mkdir(parents=True, exist_ok=True)
+    yield
+
+
+app = FastAPI(title="Multi-Agent Simulation", version="0.1.0", lifespan=lifespan)
 
 app.include_router(config_router)
 app.include_router(experiment_router)
