@@ -50,10 +50,10 @@ The following deployment-readiness issues were fixed in PR #10:
 
 | ID | Description | Status | GitHub Issue |
 |----|-------------|--------|--------------|
-| M1 | `compute_ratings` called synchronously inside `POST /api/league/ratings/recompute` — blocks the event loop for the duration of the match simulations | Open | TBD |
+| M1 | `compute_ratings` called synchronously inside `POST /api/league/ratings/recompute` — blocks the event loop for the duration of the match simulations | Fixed — wrapped in asyncio.to_thread | TBD |
 | M2 | `report_id` path parameter is used directly in a `Path` join without validation — path traversal risk | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
 | M3 | All storage paths are relative to the server's working directory — fails silently when `uvicorn` is started from a directory other than the repo root | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
-| M4 | `list_reports` sorts by `timestamp` string; reports with a missing `timestamp` field default to `""` and sort incorrectly | Open | TBD |
+| M4 | `list_reports` sorts by `timestamp` string; reports with a missing `timestamp` field default to `""` and sort incorrectly | Fixed — sort key parses to datetime with fallback to epoch min | TBD |
 | M5 | Same uninitialized `shared_pool` bug as C1 exists in the benchmark episode runner inside `routes_league.py` | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | M6 | `LeagueRegistry` is instantiated at module level on a path that may not exist — fragile on a fresh install if the registry does not create the directory in `__init__` | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
 | M7 | `connectMetrics` has no reconnection logic — a transient WebSocket disconnect silently stops the live metrics chart with no user feedback | Fixed — Resolved in PR: #11 / Branch: fix/frontend-ws-resilience | TBD |
