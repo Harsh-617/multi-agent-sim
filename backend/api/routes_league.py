@@ -81,8 +81,11 @@ async def get_ratings() -> list[dict]:
 async def recompute_ratings(req: RecomputeRatingsRequest) -> list[dict]:
     """Recompute Elo ratings for all league members and persist them."""
     members = _registry.list_members()
-    if not members:
-        return []
+    if len(members) < 2:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ratings require at least 2 league members; found {len(members)}.",
+        )
 
     ratings = compute_ratings(
         _registry,
@@ -210,7 +213,9 @@ def _run_episode_sync(
         agent.reset(aid, derive_seed(seed, i))
         agents[aid] = agent
 
-    observations: dict[str, dict] = dict(initial_obs)
+    observations: dict[str, dict] = {
+        aid: initial_obs.get(aid, {}) for aid in env.active_agents()
+    }
     shared_pool = config.population.initial_shared_pool
 
     while not env.is_done():

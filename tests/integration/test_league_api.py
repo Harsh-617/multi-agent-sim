@@ -124,13 +124,13 @@ class TestLeagueRatings:
         assert data[0]["member_id"] == "league_000001"
 
     def test_recompute_no_members(self, client: TestClient):
-        """Recompute with no members returns empty list."""
+        """Recompute with fewer than 2 members returns 409 with a clear message."""
         resp = client.post(
             "/api/league/ratings/recompute",
             json={"num_matches": 1, "seed": 42},
         )
-        assert resp.status_code == 200
-        assert resp.json() == []
+        assert resp.status_code == 409
+        assert "2" in resp.json()["detail"]
 
 
 # ── League snapshot run tests ────────────────────────────────────────

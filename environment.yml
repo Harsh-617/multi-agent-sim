@@ -6,6 +6,7 @@ dependencies:
   - python=3.11
   - pip
   - nodejs=18          # required for frontend (npm)
+  - numpy>=1.26,<2.0   # co-pinned with pyproject.toml to prevent conda/pip drift
   - pip:
       # Install the package in editable mode with dev + training extras.
       # This keeps pyproject.toml as the single source of truth.
