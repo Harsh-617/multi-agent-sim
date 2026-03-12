@@ -63,6 +63,7 @@ async def run_experiment(
 
     # Track latest observations for each agent
     observations: dict[str, dict] = dict(initial_obs)
+    shared_pool: float = config.population.initial_shared_pool
 
     try:
         while not env.is_done():
