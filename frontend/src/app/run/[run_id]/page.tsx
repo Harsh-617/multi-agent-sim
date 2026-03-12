@@ -27,6 +27,7 @@ export default function RunPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
   const seenRef = useRef(new Set<string>());
+  const doneRef = useRef(false);
 
   const handleMessage = useCallback((msg: WsMessage) => {
     if (msg.type === "step") {
@@ -44,6 +45,7 @@ export default function RunPage() {
         setEvents((prev) => [...prev, ...msg.events!]);
       }
     } else if (msg.type === "done") {
+      doneRef.current = true;
       setDone(true);
       setTerminationReason(msg.termination_reason);
       setSummary(msg.episode_summary);
@@ -65,10 +67,10 @@ export default function RunPage() {
         () => setWsStatus("closed"),
         () => {
           setWsStatus("closed");
-          // Simple retry with backoff (max 5 attempts)
-          if (retryRef.current < 5) {
+          // Exponential backoff, max 5 attempts; stop if run completed normally.
+          if (!doneRef.current && retryRef.current < 5) {
             retryRef.current++;
-            setTimeout(connect, 1000 * retryRef.current);
+            setTimeout(connect, 1000 * Math.pow(2, retryRef.current - 1));
           }
         }
       );

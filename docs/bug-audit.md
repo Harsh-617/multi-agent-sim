@@ -14,6 +14,11 @@ The following deployment-readiness issues were fixed in PR #8:
 - C5 — hardcoded backend URL in Next.js config
 - M5 — shared_pool initialization in benchmark runner verified safe
 
+The following deployment-readiness issues were fixed in the current branch (fix/frontend-ws-resilience):
+
+- C2 — WebSocket URL hardcodes backend port 8000
+- M7 — No WebSocket reconnection logic
+
 The following deployment-readiness issues were fixed in PR #10:
 
 - M2 — path traversal risk in /api/reports/{report_id}
@@ -28,7 +33,7 @@ The following deployment-readiness issues were fixed in PR #10:
 | ID | Description | Status | GitHub Issue |
 |----|-------------|--------|--------------|
 | C1 | `shared_pool` referenced before assignment in `experiment_runner` — `NameError` crash if the environment terminates before the loop body executes | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
-| C2 | WebSocket connection hardcodes port `8000` — breaks behind any reverse proxy or non-standard port | Open | TBD |
+| C2 | WebSocket connection hardcodes port `8000` — breaks behind any reverse proxy or non-standard port | Fixed — Resolved in branch: fix/frontend-ws-resilience | TBD |
 | C3 | Blocking CPU work (`_run_episode_sync`, `evaluate_robustness`, `compute_ratings`) runs directly inside `async def` endpoints, freezing the event loop | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | C4 | `GET /api/league/champion` raises HTTP 404 instead of returning a graceful empty response on a fresh install with no league members | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | C5 | `next.config.ts` hardcodes `http://localhost:8000` as the backend URL — every non-local deployment returns 502 | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
@@ -45,7 +50,7 @@ The following deployment-readiness issues were fixed in PR #10:
 | M4 | `list_reports` sorts by `timestamp` string; reports with a missing `timestamp` field default to `""` and sort incorrectly | Open | TBD |
 | M5 | Same uninitialized `shared_pool` bug as C1 exists in the benchmark episode runner inside `routes_league.py` | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | M6 | `LeagueRegistry` is instantiated at module level on a path that may not exist — fragile on a fresh install if the registry does not create the directory in `__init__` | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
-| M7 | `connectMetrics` has no reconnection logic — a transient WebSocket disconnect silently stops the live metrics chart with no user feedback | Open | TBD |
+| M7 | `connectMetrics` has no reconnection logic — a transient WebSocket disconnect silently stops the live metrics chart with no user feedback | Fixed — Resolved in branch: fix/frontend-ws-resilience | TBD |
 
 ---
 

@@ -441,7 +441,11 @@ export function connectMetrics(
   onClose?: () => void
 ): WebSocket {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${window.location.hostname}:8000/api/ws/metrics/${runId}`);
+  // NEXT_PUBLIC_WS_BASE lets local dev point directly at the backend
+  // (e.g. "localhost:8000"). In production, omit it and the current origin
+  // is used, which works correctly behind any reverse proxy.
+  const base = process.env.NEXT_PUBLIC_WS_BASE ?? window.location.host;
+  const ws = new WebSocket(`${proto}://${base}/api/ws/metrics/${runId}`);
 
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data) as WsMessage;
