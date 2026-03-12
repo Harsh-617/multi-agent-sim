@@ -4,15 +4,27 @@ This document tracks issues identified during the deployment-readiness audit of 
 
 ---
 
+## Recently Resolved
+
+The following deployment-readiness issues were fixed in PR #8:
+
+- C1 — shared_pool initialization crash
+- C3 — event loop blocking in benchmark/robustness endpoints
+- C4 — empty league champion endpoint returning 404
+- C5 — hardcoded backend URL in Next.js config
+- M5 — shared_pool initialization in benchmark runner verified safe
+
+---
+
 ## Critical
 
 | ID | Description | Status | GitHub Issue |
 |----|-------------|--------|--------------|
-| C1 | `shared_pool` referenced before assignment in `experiment_runner` — `NameError` crash if the environment terminates before the loop body executes | Open | TBD |
+| C1 | `shared_pool` referenced before assignment in `experiment_runner` — `NameError` crash if the environment terminates before the loop body executes | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | C2 | WebSocket connection hardcodes port `8000` — breaks behind any reverse proxy or non-standard port | Open | TBD |
-| C3 | Blocking CPU work (`_run_episode_sync`, `evaluate_robustness`, `compute_ratings`) runs directly inside `async def` endpoints, freezing the event loop | Open | TBD |
-| C4 | `GET /api/league/champion` raises HTTP 404 instead of returning a graceful empty response on a fresh install with no league members | Open | TBD |
-| C5 | `next.config.ts` hardcodes `http://localhost:8000` as the backend URL — every non-local deployment returns 502 | Open | TBD |
+| C3 | Blocking CPU work (`_run_episode_sync`, `evaluate_robustness`, `compute_ratings`) runs directly inside `async def` endpoints, freezing the event loop | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
+| C4 | `GET /api/league/champion` raises HTTP 404 instead of returning a graceful empty response on a fresh install with no league members | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
+| C5 | `next.config.ts` hardcodes `http://localhost:8000` as the backend URL — every non-local deployment returns 502 | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 
 ---
 
@@ -24,7 +36,7 @@ This document tracks issues identified during the deployment-readiness audit of 
 | M2 | `report_id` path parameter is used directly in a `Path` join without validation — path traversal risk | Open | TBD |
 | M3 | All storage paths are relative to the server's working directory — fails silently when `uvicorn` is started from a directory other than the repo root | Open | TBD |
 | M4 | `list_reports` sorts by `timestamp` string; reports with a missing `timestamp` field default to `""` and sort incorrectly | Open | TBD |
-| M5 | Same uninitialized `shared_pool` bug as C1 exists in the benchmark episode runner inside `routes_league.py` | Open | TBD |
+| M5 | Same uninitialized `shared_pool` bug as C1 exists in the benchmark episode runner inside `routes_league.py` | Fixed — Resolved in PR: #8 / Branch: fix/deploy-blockers | TBD |
 | M6 | `LeagueRegistry` is instantiated at module level on a path that may not exist — fragile on a fresh install if the registry does not create the directory in `__init__` | Open | TBD |
 | M7 | `connectMetrics` has no reconnection logic — a transient WebSocket disconnect silently stops the live metrics chart with no user feedback | Open | TBD |
 
