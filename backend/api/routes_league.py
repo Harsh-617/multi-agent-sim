@@ -87,7 +87,8 @@ async def recompute_ratings(req: RecomputeRatingsRequest) -> list[dict]:
             detail=f"Ratings require at least 2 league members; found {len(members)}.",
         )
 
-    ratings = compute_ratings(
+    ratings = await asyncio.to_thread(
+        compute_ratings,
         _registry,
         num_matches=req.num_matches,
         seed=req.seed,

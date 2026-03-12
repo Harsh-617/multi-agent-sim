@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -57,7 +58,17 @@ async def list_reports() -> list[dict]:
         if meta is not None:
             items.append(meta)
 
-    items.sort(key=lambda r: r["timestamp"], reverse=True)
+    _EPOCH_MIN = datetime.min.replace(tzinfo=timezone.utc)
+
+    def _ts_key(r: dict) -> datetime:
+        ts = r.get("timestamp") or ""
+        try:
+            dt = datetime.fromisoformat(ts)
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            return _EPOCH_MIN
+
+    items.sort(key=_ts_key, reverse=True)
     return items
 
 
