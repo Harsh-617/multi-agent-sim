@@ -619,6 +619,8 @@ Planned extensions include additional environment archetypes, expanded strategy 
 
 **External contributions are not being accepted at this time.**
 
+See [docs/bug-audit.md](docs/bug-audit.md) for deployment-readiness issues and their current status.
+
 ---
 
 ## License
