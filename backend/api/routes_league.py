@@ -25,13 +25,15 @@ from simulation.league.ratings import load_ratings, save_ratings, compute_rating
 from simulation.league.registry import LeagueRegistry
 from simulation.metrics.collector import MetricsCollector
 
+from backend.storage_root import STORAGE_ROOT
+
 router = APIRouter(prefix="/api/league", tags=["league"])
 
-LEAGUE_ROOT = Path("storage/agents/league")
+LEAGUE_ROOT = STORAGE_ROOT / "agents/league"
 RATINGS_PATH = LEAGUE_ROOT / "ratings.json"
-CONFIGS_DIR = Path("storage/configs")
-PPO_AGENT_DIR = Path("storage/agents/ppo_shared")
-REPORTS_ROOT = Path("storage/reports")
+CONFIGS_DIR = STORAGE_ROOT / "configs"
+PPO_AGENT_DIR = STORAGE_ROOT / "agents/ppo_shared"
+REPORTS_ROOT = STORAGE_ROOT / "reports"
 REPORTS_DIR = REPORTS_ROOT
 
 _registry = LeagueRegistry(LEAGUE_ROOT)

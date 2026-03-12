@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+_SAFE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+from backend.storage_root import STORAGE_ROOT
+
 router = APIRouter(prefix="/api", tags=["reports"])
 
-_REPORTS_ROOT = Path("storage/reports")
+_REPORTS_ROOT = STORAGE_ROOT / "reports"
 
 
 def _classify_report(folder_name: str) -> str:
@@ -59,6 +64,8 @@ async def list_reports() -> list[dict]:
 @router.get("/reports/{report_id}")
 async def get_report(report_id: str) -> dict:
     """Return full report.json content for a given report."""
+    if not _SAFE_ID_RE.match(report_id):
+        raise HTTPException(status_code=400, detail="Invalid report_id")
     report_dir = _REPORTS_ROOT / report_id
     if not report_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"Report '{report_id}' not found")
@@ -87,6 +94,8 @@ async def get_strategies(report_id: str) -> dict:
     from simulation.analysis.strategy_clustering import cluster_policies
     from simulation.analysis.strategy_labels import cluster_summaries, label_clusters
 
+    if not _SAFE_ID_RE.match(report_id):
+        raise HTTPException(status_code=400, detail="Invalid report_id")
     report_dir = _REPORTS_ROOT / report_id
     if not report_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"Report '{report_id}' not found")
