@@ -14,6 +14,12 @@ The following deployment-readiness issues were fixed in PR #8:
 - C5 — hardcoded backend URL in Next.js config
 - M5 — shared_pool initialization in benchmark runner verified safe
 
+The following deployment-readiness issues were fixed in PR #12 / Branch: fix/minor-runtime-cleanups:
+
+- L1 — recompute_ratings silent empty response with fewer than 2 members
+- L2 — numpy dependency alignment between environment.yml and pyproject.toml
+- L3 — env.reset observation alignment with active agents
+
 The following deployment-readiness issues were fixed in PR #11 / Branch: fix/frontend-ws-resilience:
 
 - C2 — WebSocket URL hardcodes backend port 8000
@@ -58,9 +64,9 @@ The following deployment-readiness issues were fixed in PR #10:
 
 | ID | Description | Status | GitHub Issue |
 |----|-------------|--------|--------------|
-| L1 | `POST /api/league/ratings/recompute` returns an empty list with no explanation when fewer than 2 league members exist | Fixed — HTTP 409 with descriptive message | TBD |
-| L2 | PyTorch and NumPy versions are not co-pinned between `pyproject.toml` and `environment.yml` — version drift likely across install methods | Fixed — numpy pinned in conda section of environment.yml | TBD |
-| L3 | Observation dict in the `routes_league` inline episode runner is populated from `env.reset()` but not re-validated against `env.active_agents()` — mismatch possible | Fixed — observations built from active_agents() keyset after reset | TBD |
+| L1 | `POST /api/league/ratings/recompute` returns an empty list with no explanation when fewer than 2 league members exist | Fixed — Resolved in PR: #12 / Branch: fix/minor-runtime-cleanups | TBD |
+| L2 | PyTorch and NumPy versions are not co-pinned between `pyproject.toml` and `environment.yml` — version drift likely across install methods | Fixed — Resolved in PR: #12 / Branch: fix/minor-runtime-cleanups | TBD |
+| L3 | Observation dict in the `routes_league` inline episode runner is populated from `env.reset()` but not re-validated against `env.active_agents()` — mismatch possible | Fixed — Resolved in PR: #12 / Branch: fix/minor-runtime-cleanups | TBD |
 | L4 | Storage subdirectories are created lazily per-request rather than at server startup — first request to each endpoint races with `mkdir` | Fixed — Resolved in PR: #10 / Branch: fix/storage-paths | TBD |
 
 ---
