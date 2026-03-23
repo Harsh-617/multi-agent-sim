@@ -499,17 +499,19 @@ This enables:
 
 ### B) Attack Actions
 Intent:
-- Directly reduce an opponent's score or resources, transferring advantage to self
+- Reduce opponents' scores or resources, transferring advantage to self
 
 Properties:
-- High potential gain
-- Outcome depends on whether opponent defends
-- Costs resources or exposes attacker if defended
+- **Untargeted in V1** — attack is directed at the environment, not a specific agent
+- The environment distributes the effect proportionally across all non-defending opponents
+- Outcome depends on how many opponents are defending
+- Costs resources whether it succeeds or fails (attacker always pays)
+- Targeted attacks (choose a specific opponent) are explicitly deferred to V2
 
 This enables:
-- aggressive play
-- targeted dominance
-- counter-strategy development
+- Aggressive play
+- Punishing passive opponents
+- The attack vs defend strategic tension
 
 ---
 
@@ -534,14 +536,16 @@ Intent:
 - High-variance play — large gain or large loss depending on environment resolution
 
 Properties:
-- Outcome is more sensitive to stochastic factors than other actions
-- Expected value roughly equal to Build, but higher variance
-- Cannot be defended against
+- Outcome = agent's BUILD gain × multiplier drawn uniformly from [0.0, 2.5] (seeded RNG)
+- Expected value ≈ BUILD × 1.25 — slightly positive bias to make it tempting
+- Capped at 2.5× to prevent runaway gains
+- Cannot be defended against — bypasses the clash resolution entirely
+- Does not consume resources
 
 This enables:
-- risk-seeking behavior under pressure
-- catching up when behind
-- unpredictability as a strategy
+- Risk-seeking behavior under pressure
+- Catching up when trailing
+- Unpredictability as a strategy
 
 ---
 
@@ -649,15 +653,15 @@ This order is **fixed**. Changing it changes semantics.
 
 Competitive actions are resolved **pairwise**, not collectively.
 
-Each ATTACK is directed at the environment (not a specific agent in V1) — the environment distributes the effect across opponents based on their choices.
+**ATTACK is untargeted in V1.** The attacker targets the environment — the environment distributes the attack effect proportionally across all non-defending opponents.
 
-### Resolution matrix (conceptual):
+### Resolution matrix:
 
 | Attacker \ Defender | DEFEND | BUILD | GAMBLE |
 |---|---|---|---|
-| **ATTACK** | Attack negated, attacker pays cost | Attack succeeds, attacker gains | Partial success |
-| **BUILD** | Build proceeds normally | Both build, no interaction | Build proceeds |
-| **DEFEND** | No gain, no loss | Defend was wasted (opportunity cost) | No gain |
+| **ATTACK** | Attack negated, attacker pays cost, no score gain | Attack succeeds, attacker gains, opponent loses | Partial success — reduced gain |
+| **BUILD** | Build proceeds normally, no interaction | Both build independently, no interaction | Build proceeds normally |
+| **DEFEND** | No gain, no loss (wasted if no attack incoming) | Defend was wasted — opportunity cost only | No gain |
 
 This creates the **rock-paper-scissors cycle**:
 - ATTACK beats BUILD (aggression beats passivity)
@@ -670,26 +674,33 @@ No single action dominates. Cyclical dominance emerges from this structure.
 
 ## 4️⃣ GAMBLE Resolution
 
-GAMBLE is resolved **independently** before pairwise clashes:
-- Outcome drawn from a bounded distribution (seeded RNG)
-- High variance: large gain or significant loss
-- Cannot be defended against — it bypasses the clash entirely
-- Expected value ≈ BUILD expected value, but with higher spread
+GAMBLE is resolved **before** pairwise clashes each step:
+- Outcome = agent's BUILD gain × multiplier drawn uniformly from [0.0, 2.5], seeded RNG
+- Expected value ≈ BUILD × 1.25 — slight positive bias makes it strategically tempting
+- Capped at 2.5× — prevents runaway gains that would break competitive balance
+- Cannot be defended against — bypasses clash resolution entirely
+- Does not consume resources
 
-This gives trailing agents a legitimate catch-up mechanism without breaking the core competitive balance.
+This gives trailing agents a legitimate catch-up mechanism without breaking core balance.
 
 ---
 
 ## 5️⃣ History-Dependent Effectiveness (Temporal Layer)
 
-The transition function is modulated by opponent history state:
+The transition function is modulated by opponent history state using one rule in V1:
 
-- An agent that has successfully attacked recently becomes **predictable** — defending against them yields a bonus
-- An agent that has only built recently is **underdefended** — attacking them yields a higher success rate
+> **If ≥ 50% of an opponent's last `opponent_history_depth` actions were ATTACK, defending against them yields a +20% defense success bonus.**
+
+This is the only history-dependent modifier in V1.
+
+Effects:
+- An agent that attacks repeatedly becomes **predictable** — opponents who defend against them get a bonus
+- An agent that has only built recently is **underdefended** — attacking them yields higher success rate
 - Switching strategy breaks the predictability penalty
 
-This is what drives **counter-strategy development and adaptation** as emergent behavior.
-History matters but never overrides the base resolution — it only adjusts margins.
+More complex pattern detection (e.g. multi-pattern recognition, decay functions) is explicitly deferred to V2.
+
+History modulates outcomes but never overrides the base resolution — it only adjusts margins.
 
 ---
 
@@ -776,10 +787,13 @@ This incentivizes:
 
 ### B) Relative Gain Component
 Reflects:
-- Change in this agent's **rank or score gap** relative to all other active agents
+- Change in this agent's rank or score gap relative to opponents
 - Gaining while others also gain = low relative reward
 - Gaining while others lose = high relative reward
 - Losing ground relative to others = negative relative reward
+
+**Important — fixed denominator rule:**
+Relative gain is always computed against the **initial** number of agents at episode start, not the current active count. Eliminated agents count as permanently last-ranked. This keeps reward scale stable and consistent throughout the episode — the same score gap always produces the same relative reward regardless of how many eliminations have occurred.
 
 This incentivizes:
 - Targeting opponents when they are vulnerable
@@ -825,10 +839,18 @@ Weights are:
 The Competitive archetype uses **per-step rewards** with a **terminal bonus**:
 
 - Per-step: small reward each timestep based on the three components above
-- Terminal: rank-based bonus issued at episode end — 1st place receives the largest bonus, last place receives zero or a small penalty
+- Terminal: rank-based bonus issued at the **final step of the episode** to all agents — both surviving and previously eliminated
+
+**Terminal bonus + PettingZoo rule:**
+The terminal bonus is held until the global episode done flag is set. It is not issued at the moment of individual agent elimination. The PettingZoo adapter handles this by issuing the terminal bonus to all agents — including eliminated ones — via a final step when the episode ends. This ensures consistent reward attribution and prevents timing conflicts with the adapter layer.
+
+Rank-based terminal bonus scale:
+- 1st place: largest bonus (configurable via `terminal_bonus_scale`)
+- Last place: zero or small penalty
+- Intermediate ranks: linearly interpolated
 
 This prevents:
-- Purely myopic play (per-step signal keeps agents active)
+- Purely myopic play (per-step signal keeps agents active each step)
 - Ignoring long-term position (terminal bonus rewards sustained dominance)
 
 ---
@@ -897,10 +919,9 @@ In the Competitive archetype:
 > **Termination reflects the completion of competitive resolution — when a winner is decided, or when continued play cannot change the outcome.**
 
 Episodes end because:
-- the time limit is reached (most common)
-- one agent has eliminated all others
-- one agent has gained an insurmountable lead (further play is meaningless)
-- only one agent remains active
+- The time limit is reached (most common)
+- One agent has eliminated all others
+- Only one agent remains active
 
 Unlike Mixed, there is **no systemic collapse** — the world does not fail.
 Termination is always about **competitive resolution**, not system health.
@@ -918,7 +939,7 @@ An individual agent may terminate while others continue.
 After agent termination:
 - The agent no longer submits actions
 - Its final score and rank are frozen and logged
-- Its position in the ranking persists — it still counts as a "loser"
+- It counts as permanently last-ranked for relative gain computation
 - Remaining agents continue competing
 
 **Key difference from Mixed:** A terminated agent's state does NOT persist as a social influence (no reputation). It simply freezes. The competitive landscape shrinks.
@@ -927,11 +948,13 @@ After agent termination:
 
 ## 3️⃣ Episode-Level Termination
 
-The entire episode terminates when **any one** of the following holds:
+The entire episode terminates when **any one** of the following holds.
+
+**V1 implements exactly three termination conditions:**
 
 ---
 
-### A) Maximum Horizon Reached
+### A) Maximum Horizon Reached — ✅ V1
 - Fixed maximum timesteps, configurable via schema
 - Most common termination in balanced matches
 - Ensures all episodes are comparable in length
@@ -939,48 +962,51 @@ The entire episode terminates when **any one** of the following holds:
 
 ---
 
-### B) Elimination — One Agent Remains
+### B) Elimination — One Agent Remains — ✅ V1
 - All agents except one have been eliminated
 - The surviving agent is the winner by default
 - Episode ends immediately — no further steps needed
 
 ---
 
-### C) Dominance Threshold Reached
-- One agent's score lead exceeds a configurable threshold relative to all others
-- Continued play cannot realistically change the outcome
-- Episode ends early to avoid wasting computation on a decided match
-
-This is the Competitive equivalent of Mixed's "stable resolution" — but defined precisely:
-- threshold = (leader score − second place score) / max_possible_score_per_step × remaining_steps
-- If this ratio exceeds the dominance margin, the episode ends
-- Deferred for V1 — only max_steps and elimination are implemented initially
-
----
-
-### D) No Active Agents Remain
+### C) No Active Agents Remain — ✅ V1
 - All agents eliminated simultaneously (edge case)
 - Episode ends with no winner — logged as a draw
 
 ---
 
-## 4️⃣ Final Rewards at Termination
-
-Upon episode termination:
-- A **rank-based terminal bonus** is issued to all agents
-  - 1st place: largest bonus
-  - Last place: zero or small penalty
-  - Intermediate ranks: interpolated
-- Per-step rewards already accumulated are not affected
-- The terminal bonus is the primary signal for learning long-term competitive strategy
-
-Important:
-- Termination ≠ success or failure by default — it is evaluative, not structural
-- A 2nd place finish is not a failure — it is a ranked outcome
+### D) Dominance Threshold — ⛔ DEFERRED to V2
+- One agent's score lead exceeds a configurable threshold
+- Would allow early termination when outcome is decided
+- **Not implemented in V1** — `dominance_margin` is disabled (set to 0) in all V1 configs
+- Deferred because the threshold formula depends on `max_possible_score_per_step`
+  which requires empirical calibration after the environment is running
 
 ---
 
-## 5️⃣ Post-Termination Behavior
+## 4️⃣ Termination Reason Codes
+
+V1 termination reason codes: `MAX_STEPS` | `ELIMINATION` | `NO_ACTIVE_AGENTS`
+
+(`DOMINANCE` is reserved for V2.)
+
+---
+
+## 5️⃣ Final Rewards at Termination
+
+Upon episode termination:
+- A rank-based terminal bonus is issued to **all agents** at the final step
+- This includes previously eliminated agents — they receive their terminal bonus
+  at episode end, not at the step they were eliminated
+- Per-step rewards already accumulated are not affected
+- The terminal bonus is the primary signal for learning long-term competitive strategy
+
+Termination ≠ success or failure by default — it is a ranked outcome.
+A 2nd place finish is not a failure.
+
+---
+
+## 6️⃣ Post-Termination Behavior
 
 After any termination condition fires:
 - No further state transitions occur
@@ -991,19 +1017,17 @@ After any termination condition fires:
 
 Eliminated agents:
 - Receive no further observations after elimination
-- Receive their terminal reward at episode end (not at elimination time)
 - Are not given dummy observations — they are simply inactive
+- Receive their terminal reward at episode end via the final step
 
 ---
 
-## 6️⃣ Determinism & Transparency
+## 7️⃣ Determinism & Transparency
 
 All termination conditions are:
 - State-based (no hidden triggers)
 - Deterministic (same config + seed = same termination point)
 - Logged explicitly with reason code
-
-Termination reason codes: `MAX_STEPS` | `ELIMINATION` | `DOMINANCE` | `NO_ACTIVE_AGENTS`
 
 This ensures reproducibility, explainability, and fair benchmarking across runs.
 
@@ -1058,7 +1082,7 @@ Includes:
 - `initial_resources` — starting resource budget per agent
 - `resource_regeneration_rate` — resources recovered per step (float, ≥ 0)
 - `elimination_threshold` — resource level at which an agent is eliminated (default 0.0)
-- `dominance_margin` — score gap ratio that triggers early termination (0 = disabled, V1 default)
+- `dominance_margin` — **V1: always set to 0 (disabled).** Reserved for V2. Do not set to non-zero values in V1 configs.
 
 These parameters shape:
 - State initialization
@@ -1073,15 +1097,18 @@ Defines how strongly each layer is applied.
 All layers are present — config adjusts their intensity.
 
 Includes:
-- `information_asymmetry` — how much opponent state is masked (0.0 = full visibility, 1.0 = heavy masking)
-- `opponent_history_depth` — how many past steps of opponent actions are tracked (integer, ≥ 1)
+- `information_asymmetry` — controls masking of opponent **scores and resources** (0.0 = full visibility, 1.0 = heavy masking)
+- `opponent_history_depth` — how many past steps of opponent **action history** are tracked (integer, ≥ 1)
+- `opponent_obs_window` — how many recent opponent actions are visible in the observation (must be ≤ `opponent_history_depth`)
 - `history_sensitivity` — how strongly past opponent patterns modulate transition outcomes (0.0–1.0)
 - `incentive_softness` — degree to which bad actions are penalized vs hard-blocked (0.0–1.0, prefer high)
 - `uncertainty_intensity` — noise magnitude on action outcomes (capped low for V1, 0.0–0.3)
-- `gamble_variance` — spread of GAMBLE action outcomes (0.0 = deterministic, 1.0 = maximum variance)
+- `gamble_variance` — spread of GAMBLE action outcomes (0.0 = deterministic multiplier, 1.0 = maximum spread within [0.0, 2.5])
 
-**Key difference from Mixed:** No `reputation_sensitivity` or `shared_pool` parameters.
-`opponent_history_depth` replaces `temporal_memory_depth` — the mechanic is opponent modeling, not trust.
+**Clarification — two observation controls are orthogonal, not overlapping:**
+- `information_asymmetry` controls what agents can see about opponent **scores and resources** (state-level masking)
+- `opponent_obs_window` controls the depth of opponent **action history** visible in observations
+- These affect different parts of the observation and do not conflict. A config with `information_asymmetry=0` (full score visibility) and `opponent_obs_window=1` (only 1 step of action history) is valid and unambiguous.
 
 ---
 
@@ -1106,12 +1133,7 @@ Agents receive only the scalar reward — the breakdown is logged for humans.
 Defines per-agent settings. V1 uses homogeneous agents.
 
 Includes:
-- `observation_memory_steps` — how many past steps appear in the agent's own history window
-- `opponent_obs_window` — how many recent opponent actions are visible in the observation (must be ≤ opponent_history_depth)
-
-Important:
-- Action and observation *structure* are fixed
-- Only parameter values vary per config
+- `observation_memory_steps` — how many past steps appear in the agent's own history window (must be ≤ `opponent_history_depth`)
 
 ---
 
@@ -1123,7 +1145,7 @@ This section enables metrics — it does not define them (that is Part 10).
 Includes:
 - `enable_step_metrics` — per-step reward, action, score deltas
 - `enable_episode_metrics` — episode summary (length, termination reason, final rankings)
-- `enable_event_log` — semantic events (elimination, dominance triggered, etc.)
+- `enable_event_log` — semantic events (elimination, etc.)
 - `step_log_frequency` — log every N steps (1 = every step)
 
 ---
@@ -1133,12 +1155,13 @@ Includes:
 Before instantiation, the config must be validated:
 - `num_agents` ≥ 2
 - `elimination_threshold` ≥ 0 and ≤ `initial_resources`
-- `dominance_margin` ∈ [0, 1] (0 = disabled)
+- `dominance_margin` must be 0 in V1 — non-zero value raises a validation error
 - `opponent_obs_window` ≤ `opponent_history_depth`
 - `observation_memory_steps` ≤ `opponent_history_depth`
 - At least one reward weight must be positive
 - `resource_regeneration_rate` ≥ 0
 - `gamble_variance` ∈ [0, 1]
+- `uncertainty_intensity` ≤ 0.3 (capped for V1)
 
 Invalid configs are rejected before instantiation — no silent failures.
 
@@ -1151,7 +1174,7 @@ With this schema:
 - Experiments are reproducible from a single config ID
 - UI forms map directly to config fields
 - Trained agents from different configs can be fairly compared via Elo
-- Cross-archetype experiments are unambiguous — type field prevents accidental mixing
+- Cross-archetype experiments are unambiguous — `environment_type` field prevents accidental mixing
 
 
 # Part 10: Instrumentation & Metrics
@@ -1440,3 +1463,41 @@ Users don't just get a score — they get **behavioral insight**:
 - **Rank sensitivity** — does its strategy change when it's leading vs trailing?
 
 This turns trained agents into **analyzable competitive strategies**, not just winners.
+
+
+---
+
+# Baseline Agents (V1)
+
+Four baseline agents are defined for V1. These are required before any PPO training begins — they bootstrap the league and provide meaningful opponents for early training runs.
+
+| Agent | Behavior |
+|---|---|
+| `RandomAgent` | Random action type and amount each step |
+| `AlwaysAttack` | Always chooses ATTACK with amount=0.5 |
+| `AlwaysBuild` | Always chooses BUILD with amount=0.5 |
+| `AlwaysDefend` | Always chooses DEFEND |
+
+**Deferred:** A reactive/conditional baseline (Competitive equivalent of TitForTat) requires targeted attacks to be meaningful — deferred to V2 alongside targeted ATTACK.
+
+---
+
+# Ambiguities Found & Resolved
+
+During the sanity check phase, the following contradictions and underspecifications were identified and resolved. These resolutions are **authoritative** — they take precedence over any ambiguous wording elsewhere in this document.
+
+1. **ATTACK targeting unspecified:** Parts 5 and 6 implied direct opponent targeting but never defined the mechanism. Resolution: ATTACK is untargeted in V1 — effect is distributed proportionally across all non-defending opponents. Targeted attacks deferred to V2.
+
+2. **GAMBLE outcome distribution unspecified:** Both parts said "high variance, bounded distribution" without defining it. Resolution: GAMBLE outcome = agent's BUILD gain × multiplier drawn uniformly from [0.0, 2.5], seeded. Expected value ≈ BUILD × 1.25. Capped at 2.5× to prevent runaway gains.
+
+3. **History sensitivity mechanism unquantified:** Part 6 described predictability penalties conceptually but gave no concrete rule. Resolution: If ≥ 50% of an opponent's last `opponent_history_depth` actions were ATTACK, defending against them yields a +20% defense success bonus. Only history-dependent modifier in V1. More complex pattern detection deferred to V2.
+
+4. **Relative gain denominator inconsistency:** Relative gain was defined against "all active agents" — denominator shrinks on elimination, causing reward scale drift. Resolution: Relative gain always computed against initial agent count. Eliminated agents count as permanently last-ranked.
+
+5. **Terminal bonus timing conflicts with PettingZoo:** PettingZoo issues rewards at the step an agent is done, not at episode end. Resolution: Terminal bonus is held until global episode done flag. Issued to all agents — including eliminated ones — at the final step via the PettingZoo adapter.
+
+6. **Dominance threshold formula used undefined variable:** Formula referenced `max_possible_score_per_step` which was never defined anywhere. Resolution: Dominance termination fully deferred to V2. `dominance_margin` is disabled (= 0) in all V1 configs. V1 termination conditions: `MAX_STEPS`, `ELIMINATION`, `NO_ACTIVE_AGENTS` only.
+
+7. **`information_asymmetry` vs `opponent_obs_window` overlap:** Two config parameters both affected opponent observability with no clear boundary. Resolution: `information_asymmetry` controls masking of opponent scores and resources. `opponent_obs_window` controls depth of opponent action history visible. Orthogonal — no conflict.
+
+8. **No baseline agents defined:** Unlike Mixed which had 5 baselines defined before training, Competitive had none. Resolution: Four baselines defined for V1 — RandomAgent, AlwaysAttack, AlwaysBuild, AlwaysDefend. Reactive/conditional baseline deferred to V2.
