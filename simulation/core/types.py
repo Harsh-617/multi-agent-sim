@@ -43,3 +43,4 @@ class TerminationReason(Enum):
     MAX_STEPS = "max_steps"
     SYSTEM_COLLAPSE = "system_collapse"
     NO_ACTIVE_AGENTS = "no_active_agents"
+    ELIMINATION = "elimination"
