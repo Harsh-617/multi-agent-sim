@@ -317,11 +317,21 @@
 
 ### Phase 3: Implementation
 
-#### Step C: Minimal Vertical Slice — Part 1
+#### Step C: Minimal Vertical Slice
 **Built:**
 - `simulation/envs/competitive/actions.py` — ActionType enum (BUILD, ATTACK, DEFEND, GAMBLE) + Action dataclass
 - `simulation/envs/competitive/state.py` — AgentState, OpponentHistoryState, GlobalState with rankings and to_observation()
 - `simulation/config/competitive_schema.py` — full Pydantic schema with all Part 9 validators
 - `simulation/config/competitive_defaults.py` — default_competitive_config(seed=42)
+- `simulation/envs/competitive/transition.py` — 8-phase resolve_actions()
+- `simulation/envs/competitive/rewards.py` — 3-component reward + terminal bonus
+- `simulation/envs/competitive/termination.py` — MAX_STEPS, ELIMINATION, NO_ACTIVE_AGENTS
+- `simulation/envs/competitive/env.py` — CompetitiveEnvironment implementing BaseEnvironment
+- `simulation/core/types.py` — added ELIMINATION to TerminationReason enum
 
-**Verified:** Import check passed. All existing Mixed tests still green.
+**Verified:**
+- Import check passed
+- Full episode runs to MAX_STEPS with 4 random agents
+- All 4 agents survive 200 steps with random play
+- Termination reason correct
+- All 231 existing Mixed tests still green
