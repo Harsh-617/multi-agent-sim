@@ -335,3 +335,22 @@
 - All 4 agents survive 200 steps with random play
 - Termination reason correct
 - All 231 existing Mixed tests still green
+
+
+#### Step D: MARL Integration
+**Built:**
+- `simulation/adapters/competitive_pettingzoo.py` — PettingZoo ParallelEnv adapter with terminal bonus timing handled correctly
+- `simulation/agents/competitive_baselines.py` — 4 baseline agents: RandomAgent, AlwaysAttack, AlwaysBuild, AlwaysDefend + registry
+- `simulation/metrics/competitive_definitions.py` — step/episode metric keys, 5 event types
+- `simulation/metrics/competitive_collector.py` — CompetitiveMetricsCollector
+- `simulation/runner/competitive_experiment_runner.py` — full episode runner with run logger integration and run manager wiring
+- `backend/schemas/api_models.py` — EnvironmentConfig union type
+- `backend/api/routes_config.py` — config creation routes to handle both archetypes
+- `backend/api/routes_experiment.py` — experiment start routes to handle both archetypes
+
+**Verified:**
+- PettingZoo parallel_api_test passes
+- Full instrumented episode runs correctly (winner, score spread, events logged)
+- Backend API accepts competitive configs and starts competitive runs
+- Run history shows correct config_id and agent_policy for new runs
+- All 231 existing Mixed tests still green
