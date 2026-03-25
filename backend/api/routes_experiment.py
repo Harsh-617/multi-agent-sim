@@ -83,6 +83,7 @@ async def start_run(req: StartRunRequest) -> StartRunResponse:
                 config, run_id, RUNS_DIR, manager,
                 agent_policy=req.agent_policy,
                 agent_kwargs=agent_kwargs,
+                config_id=req.config_id,
             )
 
         task = asyncio.create_task(_run_competitive())

@@ -24,6 +24,7 @@ def run_competitive_experiment(
     manager: Any | None = None,
     agent_policy: str = "random",
     agent_kwargs: dict[str, Any] | None = None,
+    config_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute one competitive episode, log artifacts, return episode summary.
 
@@ -48,8 +49,12 @@ def run_competitive_experiment(
     # 1. Logger
     run_logger = RunLogger(runs_dir, run_id)
 
-    # 2. Save config snapshot
-    run_logger.write_config(config.model_dump())
+    # 2. Save config snapshot (include agent_policy for registry)
+    config_dump = config.model_dump()
+    config_dump["_agent_policy"] = agent_policy
+    if config_id is not None:
+        config_dump.setdefault("identity", {})["config_id"] = config_id
+    run_logger.write_config(config_dump)
 
     # 3. Environment
     env = CompetitiveEnvironment(config)
@@ -73,63 +78,85 @@ def run_competitive_experiment(
     for i, (aid, agent) in enumerate(agents.items()):
         agent.reset(aid, seed + i + 1)
 
+    # Manager bookkeeping (mirrors Mixed runner pattern)
+    if manager is not None:
+        manager.running = True
+        manager.run_id = run_id
+        manager.max_steps = config.population.max_steps
+
     events_cursor = 0  # track how many events we've already logged
 
-    while not env.is_done():
-        step = env.current_step
+    try:
+        while not env.is_done():
+            if manager is not None and manager.stop_requested:
+                break
 
-        # Collect actions from active agents
-        active_ids = env.active_agents()
-        actions = {}
-        for aid in active_ids:
-            if aid in agents:
-                actions[aid] = agents[aid].act(observations.get(aid))
+            step = env.current_step
 
-        # Step the environment
-        results = env.step(actions)
+            # Update manager with current step
+            if manager is not None:
+                manager.step = step
 
-        # Update observations for next step
-        for aid, sr in results.items():
-            observations[aid] = sr.observation
+            # Collect actions from active agents
+            active_ids = env.active_agents()
+            actions = {}
+            for aid in active_ids:
+                if aid in agents:
+                    actions[aid] = agents[aid].act(observations.get(aid))
 
-        # Gather state for metrics
-        state = env._state
-        agent_scores = {aid: state.agents[aid].score for aid in results}
-        agent_resources = {aid: state.agents[aid].resources for aid in results}
-        rankings = state.rankings()
+            # Step the environment
+            results = env.step(actions)
 
-        # Collect step metrics
-        step_records = collector.collect_step(
-            step=step,
-            actions=actions,
-            results=results,
-            agent_scores=agent_scores,
-            agent_resources=agent_resources,
-            active_agents=env.active_agents(),
-            rankings=rankings,
+            # Update observations for next step
+            for aid, sr in results.items():
+                observations[aid] = sr.observation
+
+            # Gather state for metrics
+            state = env._state
+            agent_scores = {aid: state.agents[aid].score for aid in results}
+            agent_resources = {aid: state.agents[aid].resources for aid in results}
+            rankings = state.rankings()
+
+            # Collect step metrics
+            step_records = collector.collect_step(
+                step=step,
+                actions=actions,
+                results=results,
+                agent_scores=agent_scores,
+                agent_resources=agent_resources,
+                active_agents=env.active_agents(),
+                rankings=rankings,
+            )
+            run_logger.log_step_metrics(step_records)
+
+            # Log any new events
+            all_events = collector.events
+            new_events = all_events[events_cursor:]
+            run_logger.log_events(new_events)
+            events_cursor = len(all_events)
+
+        # 7. Episode summary
+        reason = env.termination_reason()
+        if manager is not None:
+            manager.termination_reason = reason
+
+        final_state = env._state
+        final_scores = {aid: s.score for aid, s in final_state.agents.items()}
+        final_rankings = final_state.rankings()
+
+        summary = collector.episode_summary(
+            episode_length=env.current_step,
+            termination_reason=reason,
+            final_scores=final_scores,
+            final_rankings=final_rankings,
         )
-        run_logger.log_step_metrics(step_records)
 
-        # Log any new events
-        all_events = collector.events
-        new_events = all_events[events_cursor:]
-        run_logger.log_events(new_events)
-        events_cursor = len(all_events)
+        # 8. Save summary
+        run_logger.write_episode_summary(summary)
 
-    # 7. Episode summary
-    final_state = env._state
-    final_scores = {aid: s.score for aid, s in final_state.agents.items()}
-    final_rankings = final_state.rankings()
+        # 9. Return summary
+        return summary
 
-    summary = collector.episode_summary(
-        episode_length=env.current_step,
-        termination_reason=env.termination_reason(),
-        final_scores=final_scores,
-        final_rankings=final_rankings,
-    )
-
-    # 8. Save summary
-    run_logger.write_episode_summary(summary)
-
-    # 9. Return summary
-    return summary
+    finally:
+        if manager is not None:
+            manager.running = False
