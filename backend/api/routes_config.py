@@ -6,8 +6,9 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from simulation.config.competitive_schema import CompetitiveEnvironmentConfig
 from simulation.config.schema import MixedEnvironmentConfig
 
 from backend.schemas.api_models import ConfigCreatedResponse, ConfigListItem
@@ -24,8 +25,20 @@ def _configs_dir() -> Path:
 
 
 @router.post("", response_model=ConfigCreatedResponse, status_code=201)
-async def create_config(config: MixedEnvironmentConfig) -> ConfigCreatedResponse:
-    """Validate and persist a config. Returns its generated ID."""
+async def create_config(request: Request) -> ConfigCreatedResponse:
+    """Validate and persist a config. Returns its generated ID.
+
+    Accepts either MixedEnvironmentConfig or CompetitiveEnvironmentConfig,
+    routed by ``identity.environment_type``.
+    """
+    body = await request.json()
+    env_type = body.get("identity", {}).get("environment_type", "mixed")
+
+    if env_type == "competitive":
+        config = CompetitiveEnvironmentConfig.model_validate(body)
+    else:
+        config = MixedEnvironmentConfig.model_validate(body)
+
     config_id = uuid.uuid4().hex[:12]
     path = _configs_dir() / f"{config_id}.json"
     path.write_text(config.model_dump_json(indent=2), encoding="utf-8")

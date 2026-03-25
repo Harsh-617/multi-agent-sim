@@ -6,9 +6,18 @@ simulation.config.schema and is imported directly — no duplication.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Union
 
 from pydantic import BaseModel, Field
+
+from simulation.config.competitive_schema import CompetitiveEnvironmentConfig
+from simulation.config.schema import MixedEnvironmentConfig
+
+# Union type exported for documentation purposes. Actual parsing uses
+# try/except in the endpoint because Pydantic's Discriminator requires Tag
+# annotations on each member model (which we cannot add without modifying
+# the archetype schemas).
+EnvironmentConfig = Union[MixedEnvironmentConfig, CompetitiveEnvironmentConfig]
 
 
 # ---------------------------------------------------------------------------

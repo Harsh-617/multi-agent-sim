@@ -9,8 +9,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from simulation.config.competitive_schema import CompetitiveEnvironmentConfig
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.league.registry import LeagueRegistry
+from simulation.runner.competitive_experiment_runner import run_competitive_experiment
 
 from backend.runner.experiment_runner import run_experiment
 from backend.runner.run_manager import manager
@@ -62,9 +64,9 @@ async def start_run(req: StartRunRequest) -> StartRunResponse:
                 detail=f"League member not found: {req.league_member_id}",
             )
 
-    config = MixedEnvironmentConfig.model_validate_json(
-        config_path.read_text(encoding="utf-8")
-    )
+    raw_text = config_path.read_text(encoding="utf-8")
+    raw_data = json.loads(raw_text)
+    env_type = raw_data.get("identity", {}).get("environment_type", "mixed")
 
     run_id = uuid.uuid4().hex[:12]
     manager.reset_state()
@@ -73,13 +75,27 @@ async def start_run(req: StartRunRequest) -> StartRunResponse:
     if league_member_dir:
         agent_kwargs["member_dir"] = league_member_dir
 
-    task = asyncio.create_task(
-        run_experiment(
-            config, run_id, RUNS_DIR, manager,
-            agent_policy=req.agent_policy,
-            agent_kwargs=agent_kwargs,
+    if env_type == "competitive":
+        config = CompetitiveEnvironmentConfig.model_validate(raw_data)
+
+        async def _run_competitive() -> dict:
+            return run_competitive_experiment(
+                config, run_id, RUNS_DIR, manager,
+                agent_policy=req.agent_policy,
+                agent_kwargs=agent_kwargs,
+            )
+
+        task = asyncio.create_task(_run_competitive())
+    else:
+        config = MixedEnvironmentConfig.model_validate_json(raw_text)
+        task = asyncio.create_task(
+            run_experiment(
+                config, run_id, RUNS_DIR, manager,
+                agent_policy=req.agent_policy,
+                agent_kwargs=agent_kwargs,
+            )
         )
-    )
+
     manager.attach_task(task)
 
     # Give the task a moment to initialise so status is immediately consistent
