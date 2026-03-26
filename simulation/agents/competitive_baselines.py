@@ -79,6 +79,7 @@ COMPETITIVE_POLICY_REGISTRY: dict[str, type[BaseAgent]] = {
     "always_attack": AlwaysAttackAgent,
     "always_build": AlwaysBuildAgent,
     "always_defend": AlwaysDefendAgent,
+    "competitive_ppo": None,  # type: ignore[assignment]  # lazy — resolved in factory
 }
 
 
@@ -87,5 +88,12 @@ def create_competitive_agent(policy_name: str, **kwargs: Any) -> BaseAgent:
 
     Raises KeyError if *policy_name* is not in COMPETITIVE_POLICY_REGISTRY.
     """
+    if policy_name not in COMPETITIVE_POLICY_REGISTRY:
+        raise KeyError(policy_name)
+
+    if policy_name == "competitive_ppo":
+        from simulation.agents.competitive_ppo_agent import CompetitivePPOAgent
+        return CompetitivePPOAgent(**kwargs)
+
     cls = COMPETITIVE_POLICY_REGISTRY[policy_name]
     return cls(**kwargs)
