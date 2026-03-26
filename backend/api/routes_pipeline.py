@@ -7,6 +7,14 @@ POST /api/pipeline/run
 GET /api/pipeline/{pipeline_id}/status
     Poll status of a previously started pipeline.
     Returns { running, pipeline_id, stage, error?, report_id?, summary_path? }.
+
+POST /api/competitive/pipeline/run
+    Start a competitive pipeline (training → rating → evaluating → summary).
+    Returns { pipeline_id }.
+
+GET /api/competitive/pipeline/{pipeline_id}/status
+    Poll status of a competitive pipeline run.
+    Returns { running, pipeline_id, stage, error?, summary_path? }.
 """
 
 from __future__ import annotations
@@ -20,10 +28,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.pipeline.pipeline_manager import pipeline_manager
+from backend.pipeline.pipeline_manager import PipelineManager, pipeline_manager
+from simulation.pipeline.competitive_pipeline_run import run_competitive_pipeline
 from simulation.pipeline.pipeline_run import run_pipeline
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
+
+# Separate manager instance for competitive pipelines
+competitive_pipeline_manager = PipelineManager()
 
 
 # ---------------------------------------------------------------------------
@@ -169,5 +181,146 @@ async def pipeline_status(pipeline_id: str) -> dict:
         response["report_id"] = pipeline_manager.report_id
     if pipeline_manager.summary_path is not None:
         response["summary_path"] = pipeline_manager.summary_path
+
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Competitive pipeline request model
+# ---------------------------------------------------------------------------
+
+
+class CompetitivePipelineRunRequest(BaseModel):
+    config_id: str = Field(default="default", description='Config id or "default".')
+    seed: int = Field(default=42, description="Master seed for reproducibility.")
+    seeds: list[int] | None = Field(
+        default=None, description="Explicit list of evaluation seeds."
+    )
+    episodes_per_seed: int = Field(
+        default=2, ge=1, description="Episodes per seed per policy."
+    )
+    max_steps: int | None = Field(
+        default=None, description="Optional max_steps override for faster evaluation."
+    )
+    total_timesteps: int = Field(
+        default=50_000, ge=1, description="Competitive PPO training timesteps."
+    )
+    snapshot_every_timesteps: int = Field(
+        default=10_000, ge=1, description="League snapshot interval."
+    )
+    max_league_members: int = Field(
+        default=50, ge=1, description="Maximum league members to retain."
+    )
+    num_matches: int = Field(
+        default=10, ge=1, description="Elo rating matches per member pair."
+    )
+    limit_sweeps: int | None = Field(
+        default=None, description="Cap the number of policies evaluated."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Competitive background task
+# ---------------------------------------------------------------------------
+
+
+async def _run_competitive_pipeline_task(
+    pm: Any,
+    pipeline_id: str,
+    kwargs: dict[str, Any],
+) -> None:
+    """Run competitive pipeline in thread-pool executor."""
+    loop = asyncio.get_running_loop()
+    pm.running = True
+    pm.pipeline_id = pipeline_id
+    pm.stage = "loading_config"
+
+    def _progress(stage: str, detail: str = "") -> None:
+        if stage != "done":
+            pm.set_stage(stage, detail)
+
+    def _run() -> Path:
+        return run_competitive_pipeline(progress_callback=_progress, **kwargs)
+
+    try:
+        result_path = await loop.run_in_executor(None, _run)
+        summary_file = result_path / "summary.json"
+        summary = json.loads(summary_file.read_text(encoding="utf-8"))
+        pm.summary_path = str(summary_file)
+        pm.stage = "done"
+    except Exception as exc:  # noqa: BLE001
+        pm.error = str(exc)
+        pm.stage = "error"
+    finally:
+        pm.running = False
+
+
+# ---------------------------------------------------------------------------
+# Competitive pipeline endpoints
+# ---------------------------------------------------------------------------
+
+competitive_router = APIRouter(
+    prefix="/api/competitive/pipeline", tags=["competitive-pipeline"],
+)
+
+
+@competitive_router.post("/run")
+async def start_competitive_pipeline(req: CompetitivePipelineRunRequest) -> dict:
+    """Start the competitive pipeline in the background.
+
+    Returns ``{ pipeline_id }`` immediately; poll ``/status`` for progress.
+    """
+    if competitive_pipeline_manager.running:
+        raise HTTPException(
+            status_code=409, detail="A competitive pipeline is already running."
+        )
+
+    pipeline_id = uuid.uuid4().hex[:12]
+    competitive_pipeline_manager.reset_state()
+    competitive_pipeline_manager.pipeline_id = pipeline_id
+
+    kwargs: dict[str, Any] = {
+        "config_id": req.config_id,
+        "seed": req.seed,
+        "seeds": req.seeds,
+        "episodes_per_seed": req.episodes_per_seed,
+        "max_steps": req.max_steps,
+        "total_timesteps": req.total_timesteps,
+        "snapshot_every_timesteps": req.snapshot_every_timesteps,
+        "max_league_members": req.max_league_members,
+        "num_matches": req.num_matches,
+        "limit_sweeps": req.limit_sweeps,
+    }
+
+    task = asyncio.create_task(
+        _run_competitive_pipeline_task(
+            competitive_pipeline_manager, pipeline_id, kwargs,
+        )
+    )
+    competitive_pipeline_manager.attach_task(task)
+
+    await asyncio.sleep(0)
+
+    return {"pipeline_id": pipeline_id}
+
+
+@competitive_router.get("/{pipeline_id}/status")
+async def competitive_pipeline_status(pipeline_id: str) -> dict:
+    """Return the current status of a competitive pipeline run."""
+    if competitive_pipeline_manager.pipeline_id != pipeline_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Competitive pipeline '{pipeline_id}' not found.",
+        )
+
+    response: dict[str, Any] = {
+        "pipeline_id": pipeline_id,
+        "running": competitive_pipeline_manager.running,
+        "stage": competitive_pipeline_manager.stage,
+    }
+    if competitive_pipeline_manager.error is not None:
+        response["error"] = competitive_pipeline_manager.error
+    if competitive_pipeline_manager.summary_path is not None:
+        response["summary_path"] = competitive_pipeline_manager.summary_path
 
     return response
