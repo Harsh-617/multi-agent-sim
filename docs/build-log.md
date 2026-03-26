@@ -354,3 +354,18 @@
 - Backend API accepts competitive configs and starts competitive runs
 - Run history shows correct config_id and agent_policy for new runs
 - All 231 existing Mixed tests still green
+
+
+# Add to docs/build-log.md under Competitive Phase 3:
+
+#### Step E: PPO Training
+**Built:**
+- `simulation/training/competitive_ppo.py` — PPO training loop, CompetitivePPOConfig, CompetitivePolicyNetwork, league snapshots to storage/agents/competitive_league/
+- `simulation/agents/competitive_ppo_agent.py` — PPO inference agent, lazy torch import, obs flattening
+- Updated `simulation/agents/competitive_baselines.py` — added competitive_ppo to registry
+
+**Verified:**
+- Full 50k timestep training run completes in ~72 seconds
+- 4 league snapshots created during training
+- PPO agent runs episodes correctly via policy registry
+- All 231 existing tests still green
