@@ -65,6 +65,14 @@ class CompetitivePPOConfig:
     # Competitive-specific: which baseline to use as opponent during training
     opponent_policy: str = "random"
 
+    # League self-play mode
+    league_selfplay: bool = False
+    opponent_mix_baseline_weight: float = 0.6
+    opponent_mix_league_weight_recent: float = 0.2
+    opponent_mix_league_weight_old: float = 0.1
+    opponent_mix_fixed_weight: float = 0.1
+    include_fixed_competitive_ppo: bool = True
+
     # Periodic league snapshots
     snapshot_every_timesteps: int = 10_000
     max_league_members: int = 50
@@ -262,6 +270,270 @@ def train(
     """Run PPO training and return the path to saved artifacts."""
     if ppo_cfg is None:
         ppo_cfg = CompetitivePPOConfig()
+
+    if ppo_cfg.league_selfplay:
+        return _train_league(env_config, ppo_cfg)
+
+    return _train_standard(env_config, ppo_cfg)
+
+
+def _create_competitive_opponent_from_spec(
+    spec: dict[str, str],
+    registry: Any,
+) -> Any:
+    """Create a competitive BaseAgent from a policy spec dict."""
+    source = spec["type"]
+    policy = spec["policy"]
+    if source == "baseline":
+        return create_competitive_agent(policy)
+    if source == "league":
+        member_dir = registry.load_member(policy)
+        from simulation.agents.competitive_ppo_agent import CompetitivePPOAgent
+        return CompetitivePPOAgent(agent_dir=member_dir, deterministic=True)
+    if source == "fixed":
+        return create_competitive_agent(policy)
+    raise ValueError(f"Unknown opponent source: {source!r}")
+
+
+def _train_league(
+    env_config: CompetitiveEnvironmentConfig,
+    ppo_cfg: CompetitivePPOConfig,
+) -> Path:
+    """PPO training with opponent sampling from competitive league / baselines / fixed."""
+    from simulation.core.seeding import derive_seed
+    from simulation.league.registry import LeagueRegistry
+    from simulation.league.competitive_sampling import (
+        CompetitiveOpponentSampler,
+        COMPETITIVE_BASELINE_POLICIES,
+    )
+
+    # Seeding
+    torch.manual_seed(ppo_cfg.seed)
+    np.random.seed(ppo_cfg.seed)
+    device = torch.device(ppo_cfg.device)
+
+    # Environment
+    env = CompetitivePettingZooParallelEnv(env_config)
+    obs_dim = _flat_obs_dim(env)
+    num_action_types = len(ACTION_TYPE_ORDER)
+    learning_agent = env.possible_agents[0]
+
+    # Network + optimizer
+    net = CompetitivePolicyNetwork(obs_dim, num_action_types).to(device)
+    optimizer = torch.optim.Adam(net.parameters(), lr=ppo_cfg.learning_rate, eps=1e-5)
+
+    # League registry + sampler
+    league_root = str(Path(ppo_cfg.save_dir) / "competitive_league")
+    registry = LeagueRegistry(league_root=league_root)
+    rng = np.random.default_rng(ppo_cfg.seed)
+
+    sampler = CompetitiveOpponentSampler(
+        recent_weight=ppo_cfg.opponent_mix_league_weight_recent,
+        old_weight=ppo_cfg.opponent_mix_league_weight_old,
+        baseline_weight=ppo_cfg.opponent_mix_baseline_weight,
+        fixed_weight=ppo_cfg.opponent_mix_fixed_weight,
+    )
+
+    baselines = list(COMPETITIVE_BASELINE_POLICIES)
+    fixed_policies = ["competitive_ppo"] if ppo_cfg.include_fixed_competitive_ppo else []
+
+    # TensorBoard
+    writer = None
+    if ppo_cfg.tb_log_dir:
+        from torch.utils.tensorboard import SummaryWriter
+        writer = SummaryWriter(log_dir=ppo_cfg.tb_log_dir)
+
+    # Progress bar
+    try:
+        from tqdm import tqdm
+        pbar = tqdm(total=ppo_cfg.total_timesteps, desc="Competitive PPO league training")
+    except ImportError:
+        pbar = None
+
+    global_step = 0
+    num_updates = ppo_cfg.total_timesteps // ppo_cfg.rollout_steps
+    episode_returns: list[float] = []
+    opponent_source_counts: dict[str, int] = {
+        "baseline": 0, "league": 0, "fixed": 0,
+    }
+
+    episode_idx = 0
+
+    # Snapshot tracking
+    next_snapshot_step = ppo_cfg.snapshot_every_timesteps
+    last_snapshot_id: str | None = None
+    snapshots_created = 0
+
+    # ---- helper closures --------------------------------------------------
+
+    def _sample_and_create_opponent() -> tuple[Any, str]:
+        """Sample opponent spec, create agent, return (agent, source)."""
+        spec = sampler.sample(registry, baselines, fixed_policies, rng)
+        source = spec["type"]
+        opponent_source_counts.setdefault(source, 0)
+        opponent_source_counts[source] += 1
+        try:
+            agent = _create_competitive_opponent_from_spec(spec, registry)
+        except (FileNotFoundError, KeyError):
+            fallback_spec = {"type": "baseline", "policy": "random"}
+            agent = _create_competitive_opponent_from_spec(fallback_spec, registry)
+            opponent_source_counts[source] -= 1
+            opponent_source_counts["baseline"] += 1
+            source = "baseline"
+        return agent, source
+
+    # ---- main loop --------------------------------------------------------
+
+    for update in range(1, num_updates + 1):
+        buf = RolloutBuffer(ppo_cfg.rollout_steps, obs_dim, device=str(device))
+
+        # Initial episode setup
+        opponent_agent, current_source = _sample_and_create_opponent()
+        observations, _ = env.reset(seed=ppo_cfg.seed + update)
+
+        # Reset opponent for all non-learning agents
+        for i, aid in enumerate(env.possible_agents):
+            if aid != learning_agent:
+                from simulation.core.seeding import derive_seed as _ds
+                opponent_agent.reset(aid, _ds(ppo_cfg.seed, episode_idx * 100 + i))
+        ep_reward_learning = 0.0
+        episode_idx += 1
+
+        for _step in range(ppo_cfg.rollout_steps):
+            if not env.agents:
+                # Episode ended, record and start new
+                episode_returns.append(ep_reward_learning)
+
+                opponent_agent, current_source = _sample_and_create_opponent()
+                observations, _ = env.reset(seed=ppo_cfg.seed + update + _step + 1000)
+                if not env.agents:
+                    break
+                for i, aid in enumerate(env.possible_agents):
+                    if aid != learning_agent:
+                        opponent_agent.reset(aid, derive_seed(ppo_cfg.seed, episode_idx * 100 + i))
+                ep_reward_learning = 0.0
+                episode_idx += 1
+
+            gym_actions: dict[str, dict[str, Any]] = {}
+            learning_data = None
+
+            for agent_id in env.agents:
+                if agent_id == learning_agent:
+                    obs_flat = _flatten_obs(observations[agent_id])
+                    obs_t = torch.from_numpy(obs_flat).to(device)
+                    with torch.no_grad():
+                        at, amt, lp, _, val = net.get_action_and_value(obs_t.unsqueeze(0))
+                    at_item = at.item()
+                    amt_item = amt.item()
+                    gym_actions[agent_id] = {
+                        "action_type": at_item,
+                        "amount": np.array([amt_item], dtype=np.float32),
+                    }
+                    learning_data = (obs_t, at_item, amt_item, lp.item(), val.item())
+                else:
+                    if hasattr(opponent_agent, 'act'):
+                        action = opponent_agent.act(observations[agent_id])
+                        gym_actions[agent_id] = _action_to_gym(action)
+                    else:
+                        gym_actions[agent_id] = {
+                            "action_type": int(np.random.randint(num_action_types)),
+                            "amount": np.array([np.random.uniform()], dtype=np.float32),
+                        }
+
+            next_obs, rewards, terminations, truncations, infos = env.step(gym_actions)
+
+            if learning_data is not None and learning_agent in rewards:
+                obs_t, at_item, amt_item, lp, val = learning_data
+                r = rewards[learning_agent]
+                done = terminations.get(learning_agent, False) or truncations.get(learning_agent, False)
+                buf.add(obs_t, at_item, amt_item, lp, r, float(done), val)
+                ep_reward_learning += r
+
+            observations = next_obs
+            global_step += 1
+
+        if pbar:
+            pbar.update(ppo_cfg.rollout_steps)
+
+        if buf.ptr == 0:
+            continue
+
+        # Compute last value for GAE
+        if env.agents and learning_agent in observations and learning_agent in env.agents:
+            obs_flat = _flatten_obs(observations[learning_agent])
+            obs_t = torch.from_numpy(obs_flat).to(device)
+            with torch.no_grad():
+                last_val = net.get_value(obs_t.unsqueeze(0)).item()
+        else:
+            last_val = 0.0
+
+        buf.compute_gae(last_val, ppo_cfg.gamma, ppo_cfg.gae_lambda)
+
+        # PPO update
+        pl = vl = ent = 0.0
+        for _epoch in range(ppo_cfg.ppo_epochs):
+            for (mb_obs, mb_at, mb_amt, mb_old_lp, mb_adv, mb_ret) in buf.get_batches(
+                ppo_cfg.num_minibatches
+            ):
+                _, _, new_lp, entropy, new_val = net.get_action_and_value(
+                    mb_obs, mb_at, mb_amt
+                )
+                mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
+                ratio = torch.exp(new_lp - mb_old_lp)
+                surr1 = ratio * mb_adv
+                surr2 = torch.clamp(ratio, 1 - ppo_cfg.clip_eps, 1 + ppo_cfg.clip_eps) * mb_adv
+                policy_loss = -torch.min(surr1, surr2).mean()
+                value_loss = ((new_val - mb_ret) ** 2).mean()
+                entropy_loss = -entropy.mean()
+                loss = policy_loss + ppo_cfg.vf_coef * value_loss + ppo_cfg.ent_coef * entropy_loss
+
+                optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(net.parameters(), ppo_cfg.max_grad_norm)
+                optimizer.step()
+
+                pl = policy_loss.item()
+                vl = value_loss.item()
+                ent = -entropy_loss.item()
+
+        # Logging
+        if writer and episode_returns:
+            writer.add_scalar("charts/mean_episode_return", np.mean(episode_returns[-10:]), global_step)
+            writer.add_scalar("losses/policy_loss", pl, global_step)
+            writer.add_scalar("losses/value_loss", vl, global_step)
+            writer.add_scalar("losses/entropy", ent, global_step)
+
+        # Periodic league snapshot
+        if global_step >= next_snapshot_step:
+            _save_artifacts(net, env_config, ppo_cfg, obs_dim, global_step)
+            notes = f"league checkpoint @ {global_step}"
+            last_snapshot_id = registry.save_snapshot(
+                source_dir=Path(ppo_cfg.save_dir) / ppo_cfg.agent_id,
+                parent_id=last_snapshot_id,
+                notes=notes,
+            )
+            snapshots_created += 1
+            _trim_league_members(registry, ppo_cfg.max_league_members)
+            next_snapshot_step += ppo_cfg.snapshot_every_timesteps
+
+    if pbar:
+        pbar.close()
+    if writer:
+        writer.close()
+
+    save_path = _save_artifacts(
+        net, env_config, ppo_cfg, obs_dim, global_step,
+        last_league_snapshot_id=last_snapshot_id,
+        snapshots_created=snapshots_created,
+    )
+    return save_path
+
+
+def _train_standard(
+    env_config: CompetitiveEnvironmentConfig,
+    ppo_cfg: CompetitivePPOConfig,
+) -> Path:
+    """Original PPO training with simple baseline opponents (default)."""
 
     # Seeding
     torch.manual_seed(ppo_cfg.seed)
