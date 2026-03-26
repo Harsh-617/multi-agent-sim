@@ -369,3 +369,20 @@
 - 4 league snapshots created during training
 - PPO agent runs episodes correctly via policy registry
 - All 231 existing tests still green
+
+
+#### Step F: League System + Pipeline
+**Built:**
+- `simulation/league/competitive_sampling.py` — CompetitiveOpponentSampler
+- `simulation/league/competitive_eval.py` — population eval across all policies
+- `simulation/training/competitive_ppo.py` — updated with league self-play mode
+- `backend/api/routes_competitive_league.py` — 6 league endpoints
+- `simulation/pipeline/competitive_pipeline_run.py` — end-to-end pipeline
+- `backend/api/routes_pipeline.py` — competitive pipeline endpoints
+- `backend/main.py` — registered new routers
+
+**Verified:**
+- Full pipeline runs end-to-end: training → rating → eval → reporting
+- 7 league members rated, champion identified (rating 1027)
+- PPO agent outperforms all baselines in population eval
+- All 231 existing Mixed tests still green
