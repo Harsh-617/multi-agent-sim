@@ -431,6 +431,143 @@ export function getLeagueEvolution(): Promise<LeagueEvolutionResponse> {
 }
 
 // ---------------------------------------------------------------------------
+// Competitive League
+// ---------------------------------------------------------------------------
+
+export type CompetitiveAgentPolicy =
+  | "random"
+  | "always_attack"
+  | "always_build"
+  | "always_defend"
+  | "competitive_ppo";
+
+export function createCompetitiveConfig(config: {
+  num_agents: number;
+  max_steps: number;
+  seed: number;
+}): Promise<{ config_id: string }> {
+  return json(`${BASE}/configs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      identity: {
+        environment_type: "competitive",
+        environment_version: "0.1.0",
+        seed: config.seed,
+      },
+      population: {
+        num_agents: config.num_agents,
+        max_steps: config.max_steps,
+        initial_score: 0.0,
+        initial_resources: 20.0,
+        resource_regeneration_rate: 1.0,
+        elimination_threshold: 0.0,
+        dominance_margin: 0.0,
+      },
+      layers: {
+        information_asymmetry: 0.3,
+        opponent_history_depth: 10,
+        opponent_obs_window: 5,
+        history_sensitivity: 0.5,
+        incentive_softness: 0.8,
+        uncertainty_intensity: 0.1,
+        gamble_variance: 0.5,
+      },
+      rewards: {
+        absolute_gain_weight: 1.0,
+        relative_gain_weight: 0.5,
+        efficiency_weight: 0.3,
+        terminal_bonus_scale: 2.0,
+        penalty_scaling: 1.0,
+      },
+      agents: {
+        observation_memory_steps: 5,
+      },
+      instrumentation: {
+        enable_step_metrics: true,
+        enable_episode_metrics: true,
+        enable_event_log: true,
+        step_log_frequency: 1,
+      },
+    }),
+  });
+}
+
+export function startCompetitiveRun(
+  configId: string,
+  agentPolicy: CompetitiveAgentPolicy = "random",
+): Promise<{ run_id: string }> {
+  return json(`${BASE}/runs/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      config_id: configId,
+      agent_policy: agentPolicy,
+    }),
+  });
+}
+
+export interface CompetitiveLeagueMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  [key: string]: unknown;
+}
+
+export interface CompetitiveLeagueRating {
+  member_id: string;
+  rating: number;
+}
+
+export function getCompetitiveLeagueMembers(): Promise<CompetitiveLeagueMember[]> {
+  return json(`${BASE}/competitive/league/members`);
+}
+
+export function getCompetitiveLeagueRatings(): Promise<CompetitiveLeagueRating[]> {
+  return json(`${BASE}/competitive/league/ratings`);
+}
+
+export function recomputeCompetitiveLeagueRatings(
+  numMatches: number = 10,
+  seed: number = 42,
+): Promise<CompetitiveLeagueRating[]> {
+  return json(`${BASE}/competitive/league/ratings/recompute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ num_matches: numMatches, seed }),
+  });
+}
+
+export interface CompetitiveLineageMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  rating: number;
+}
+
+export interface CompetitiveLineageResponse {
+  members: CompetitiveLineageMember[];
+}
+
+export function getCompetitiveLeagueLineage(): Promise<CompetitiveLineageResponse> {
+  return json(`${BASE}/competitive/league/lineage`);
+}
+
+export interface CompetitiveChampionInfo {
+  member_id: string | null;
+  rating?: number;
+  parent_id?: string | null;
+  created_at?: string | null;
+  notes?: string | null;
+}
+
+export function getCompetitiveChampion(): Promise<CompetitiveChampionInfo> {
+  return json(`${BASE}/competitive/league/champion`);
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 

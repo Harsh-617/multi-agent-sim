@@ -8,6 +8,12 @@ export default function HomePage() {
         <h1 className="text-2xl font-bold">Multi-Agent Simulation</h1>
         <div className="flex gap-2">
           <Link
+            href="/competitive"
+            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+          >
+            Competitive
+          </Link>
+          <Link
             href="/league"
             className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
           >
