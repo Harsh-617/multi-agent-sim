@@ -386,3 +386,52 @@
 - 7 league members rated, champion identified (rating 1027)
 - PPO agent outperforms all baselines in population eval
 - All 231 existing Mixed tests still green
+
+
+#### Step E: PPO Training
+**Built:**
+- `simulation/training/competitive_ppo.py` — PPO training loop, CompetitivePPOConfig, CompetitivePolicyNetwork, league snapshots to storage/agents/competitive_league/
+- `simulation/agents/competitive_ppo_agent.py` — PPO inference agent, lazy torch import, obs flattening
+- Updated `simulation/agents/competitive_baselines.py` — added competitive_ppo to registry
+
+**Verified:**
+- Full 50k timestep training run completes in ~72 seconds
+- 4 league snapshots created during training
+- PPO agent runs episodes correctly via policy registry
+- All tests green
+
+#### Step F: League System + Pipeline
+**Built:**
+- `simulation/league/competitive_sampling.py` — CompetitiveOpponentSampler
+- `simulation/league/competitive_eval.py` — population eval across all policies
+- Updated `simulation/training/competitive_ppo.py` — league self-play mode
+- `backend/api/routes_competitive_league.py` — 6 league endpoints
+- `simulation/pipeline/competitive_pipeline_run.py` — end-to-end pipeline
+- Updated `backend/api/routes_pipeline.py` — competitive pipeline endpoints
+- Updated `backend/main.py` — registered new routers
+
+**Verified:**
+- Full pipeline runs end-to-end: training → rating → eval → reporting
+- 7 league members rated, champion identified (rating 1027)
+- PPO agent outperforms all baselines in population eval
+- All tests green
+
+#### Frontend: Competitive Dashboard
+**Built:**
+- `frontend/src/app/competitive/page.tsx` — competitive dashboard with config form and league standings
+- Updated `frontend/src/lib/api.ts` — competitive API client functions
+- Updated `frontend/src/app/page.tsx` — added Competitive nav link
+
+**Verified:**
+- Frontend builds clean
+- Create config + start run flow works end to end
+- Run completes correctly (max_steps, episode_length 200)
+- League standings table shows data after recompute
+
+#### Tests
+**Built:**
+- `tests/unit/test_competitive_env.py` — 35 unit tests across 8 test classes
+
+**Verified:**
+- 266 total tests green (35 new + 231 existing)
+- Zero regressions
