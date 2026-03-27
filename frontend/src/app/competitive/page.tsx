@@ -65,7 +65,7 @@ export default function CompetitivePage() {
         seed,
       });
       const { run_id } = await startCompetitiveRun(config_id, agentPolicy);
-      router.push(`/runs/${run_id}`);
+      router.push(`/run/${run_id}`);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : String(err));
     } finally {
