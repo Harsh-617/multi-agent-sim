@@ -10,6 +10,7 @@ from backend.api.routes_config import router as config_router
 from backend.api.routes_experiment import router as experiment_router
 from backend.api.routes_history import router as history_router
 from backend.api.routes_competitive_league import router as competitive_league_router
+from backend.api.routes_competitive_reports import router as competitive_reports_router
 from backend.api.routes_league import router as league_router
 from backend.api.routes_pipeline import competitive_router as competitive_pipeline_router
 from backend.api.routes_pipeline import router as pipeline_router
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Multi-Agent Simulation", version="0.1.0", lifespan=lifespan)
 
 app.include_router(competitive_league_router)
+app.include_router(competitive_reports_router)
 app.include_router(config_router)
 app.include_router(experiment_router)
 app.include_router(history_router)
