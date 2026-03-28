@@ -573,8 +573,8 @@ export default function CompetitiveLeaguePage() {
   return (
     <main className="max-w-5xl mx-auto p-8">
       <div className="flex items-center gap-4 mb-6">
-        <Link href="/" className="text-blue-500 hover:underline text-sm">
-          &larr; Home
+        <Link href="/competitive" className="text-blue-500 hover:underline text-sm">
+          &larr; Back
         </Link>
         <h1 className="text-2xl font-bold">Competitive League</h1>
         <button

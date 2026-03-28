@@ -101,7 +101,7 @@ export default function CompetitivePage() {
             Home
           </Link>
           <Link
-            href="/league"
+            href="/competitive/league"
             className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
           >
             League
