@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from simulation.agents import create_agent
 from simulation.agents.base import BaseAgent
 from simulation.analysis.strategy_clustering import cluster_policies
+from simulation.analysis.strategy_labels import label_clusters
 from simulation.config.defaults import default_config
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.core.seeding import derive_seed
@@ -396,13 +397,11 @@ def _evolution_clusters_and_labels(
     members: list[dict],
     ratings: dict[str, float],
 ) -> tuple[dict[str, int], dict[int, str]]:
-    """Cluster members by Elo rating and assign deterministic labels.
+    """Cluster members by Elo rating and assign Mixed strategy labels.
 
     Uses existing cluster_policies() with rating as the sole feature (mean_return
-    proxy), then labels clusters by mean rating:
-      - Highest mean-rating cluster  -> "Champion"
-      - Lowest mean-rating cluster   -> "Developing"
-      - Intermediate clusters        -> "Competitive"
+    proxy), then label_clusters() to assign Mixed labels:
+      Exploitative, Cooperative, Robust, Unstable.
     """
     if not members:
         return {}, {}
@@ -420,26 +419,7 @@ def _evolution_clusters_and_labels(
     }
 
     clusters = cluster_policies(synthetic_features)  # {member_id: cluster_id}
-    unique_clusters = sorted(set(clusters.values()))
-
-    # Compute mean Elo per cluster for label assignment.
-    cluster_mean: dict[int, float] = {}
-    for cid in unique_clusters:
-        grp = [mid for mid, c in clusters.items() if c == cid]
-        cluster_mean[cid] = (
-            sum(ratings.get(m, _DEFAULT_RATING) for m in grp) / len(grp)
-            if grp else _DEFAULT_RATING
-        )
-
-    ordered = sorted(unique_clusters, key=lambda c: cluster_mean[c])
-    if len(ordered) == 1:
-        label_map: dict[int, str] = {ordered[0]: "Champion"}
-    elif len(ordered) == 2:
-        label_map = {ordered[0]: "Developing", ordered[1]: "Champion"}
-    else:
-        label_map = {ordered[0]: "Developing", ordered[-1]: "Champion"}
-        for cid in ordered[1:-1]:
-            label_map[cid] = "Competitive"
+    label_map = label_clusters(clusters, synthetic_features)
 
     return clusters, label_map
 
@@ -472,7 +452,7 @@ async def get_evolution() -> dict:
         mid = m["member_id"]
         r = ratings.get(mid, _DEFAULT_RATING)
         cid = clusters.get(mid, 0)
-        label = label_map.get(cid, "Developing")
+        label = label_map.get(cid, "Unstable")
         result_members.append({
             "member_id": mid,
             "parent_id": m.get("parent_id"),
@@ -493,7 +473,7 @@ async def get_evolution() -> dict:
         mid = m["member_id"]
         r = ratings.get(mid, _DEFAULT_RATING)
         cid = clusters.get(mid, 0)
-        label = label_map.get(cid, "Developing")
+        label = label_map.get(cid, "Unstable")
         champion_history.append({
             "member_id": mid,
             "created_at": m.get("created_at"),
