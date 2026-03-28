@@ -13,10 +13,16 @@ from pydantic import BaseModel, Field
 
 from simulation.agents.competitive_baselines import create_competitive_agent
 from simulation.config.competitive_defaults import default_competitive_config
+from simulation.config.competitive_schema import CompetitiveEnvironmentConfig
 from simulation.core.seeding import derive_seed
 from simulation.envs.competitive.env import CompetitiveEnvironment
+from simulation.evaluation.competitive_policy_set import get_competitive_policy_specs
+from simulation.evaluation.competitive_reporting import write_competitive_report
+from simulation.evaluation.competitive_robustness import run_competitive_robustness
+from simulation.league.competitive_sampling import COMPETITIVE_BASELINE_POLICIES
 from simulation.league.ratings import load_ratings, save_ratings, START_RATING, elo_update
 from simulation.league.registry import LeagueRegistry
+from simulation.metrics.competitive_collector import CompetitiveMetricsCollector
 
 from backend.storage_root import STORAGE_ROOT
 
@@ -24,6 +30,9 @@ router = APIRouter(prefix="/api/competitive/league", tags=["competitive-league"]
 
 LEAGUE_ROOT = STORAGE_ROOT / "agents/competitive_league"
 RATINGS_PATH = LEAGUE_ROOT / "ratings.json"
+CONFIGS_DIR = STORAGE_ROOT / "configs"
+COMPETITIVE_PPO_DIR = STORAGE_ROOT / "agents/competitive_ppo"
+REPORTS_ROOT = STORAGE_ROOT / "reports"
 
 _registry = LeagueRegistry(LEAGUE_ROOT)
 
@@ -409,3 +418,243 @@ async def get_champion() -> dict:
     if champ is None:
         return {"member_id": None}
     return champ
+
+
+# ------------------------------------------------------------------
+# Champion vs Baseline benchmark
+# ------------------------------------------------------------------
+
+
+class ChampionBenchmarkRequest(BaseModel):
+    config_id: str = Field(default="default")
+    episodes: int = Field(default=10, ge=1, le=100)
+    seed: int = Field(default=42)
+
+
+def _run_competitive_benchmark_episode(
+    config: CompetitiveEnvironmentConfig,
+    policy_name: str,
+    seed: int,
+) -> dict:
+    """Run one competitive episode and return summary stats."""
+    env = CompetitiveEnvironment(config)
+    collector = CompetitiveMetricsCollector(config.instrumentation)
+    observations = env.reset(seed=seed)
+
+    agent_ids = env.active_agents()
+    eval_id = agent_ids[0]
+
+    agents: dict[str, Any] = {}
+    for i, aid in enumerate(agent_ids):
+        agent = create_competitive_agent(policy_name)
+        agent.reset(aid, derive_seed(seed, i))
+        agents[aid] = agent
+
+    total_reward = 0.0
+    step = 0
+
+    while not env.is_done():
+        active = env.active_agents()
+        actions: dict[str, Any] = {}
+        for aid in active:
+            obs = observations.get(aid)
+            if aid in agents:
+                actions[aid] = agents[aid].act(obs)
+
+        results = env.step(actions)
+
+        state = env._state
+        agent_scores = {aid: state.agents[aid].score for aid in results}
+        agent_resources = {aid: state.agents[aid].resources for aid in results}
+        rankings = state.rankings()
+        collector.collect_step(
+            step=step,
+            actions=actions,
+            results=results,
+            agent_scores=agent_scores,
+            agent_resources=agent_resources,
+            active_agents=env.active_agents(),
+            rankings=rankings,
+        )
+
+        observations = {aid: sr.observation for aid, sr in results.items()}
+        if eval_id in results:
+            total_reward += results[eval_id].reward
+        step += 1
+
+    final_state = env._state
+    final_scores = {aid: s.score for aid, s in final_state.agents.items()}
+    final_rankings = final_state.rankings()
+
+    final_rank = 1
+    for rank_idx, (aid, _score) in enumerate(final_rankings, start=1):
+        if aid == eval_id:
+            final_rank = rank_idx
+            break
+
+    summary = collector.episode_summary(
+        episode_length=step,
+        termination_reason=env.termination_reason(),
+        final_scores=final_scores,
+        final_rankings=final_rankings,
+    )
+    is_winner = summary.get("winner_id") == eval_id
+
+    return {
+        "reward": total_reward,
+        "final_score": final_scores.get(eval_id, 0.0),
+        "is_winner": is_winner,
+        "episode_length": step,
+    }
+
+
+def _benchmark_competitive_policy(
+    config: CompetitiveEnvironmentConfig,
+    policy_name: str,
+    episodes: int,
+    base_seed: int,
+) -> dict:
+    """Run *episodes* competitive episodes for a single policy and aggregate."""
+    rewards: list[float] = []
+    final_scores: list[float] = []
+    wins: list[bool] = []
+    episode_lengths: list[int] = []
+
+    for ep in range(episodes):
+        ep_seed = derive_seed(base_seed, ep)
+        ep_result = _run_competitive_benchmark_episode(
+            config, policy_name, ep_seed,
+        )
+        rewards.append(ep_result["reward"])
+        final_scores.append(ep_result["final_score"])
+        wins.append(ep_result["is_winner"])
+        episode_lengths.append(ep_result["episode_length"])
+
+    n = max(len(rewards), 1)
+    return {
+        "mean_total_reward": round(sum(rewards) / n, 4),
+        "mean_final_score": round(sum(final_scores) / n, 4),
+        "win_rate": round(sum(wins) / n, 4),
+        "mean_episode_length": round(sum(episode_lengths) / n, 2),
+    }
+
+
+@router.post("/champion/benchmark")
+async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
+    """Benchmark the competitive champion against baseline policies."""
+    # Load config
+    if req.config_id == "default":
+        config = default_competitive_config(seed=req.seed)
+    else:
+        config_path = CONFIGS_DIR / f"{req.config_id}.json"
+        if not config_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Config {req.config_id} not found."
+            )
+        config = CompetitiveEnvironmentConfig.model_validate_json(
+            config_path.read_text(encoding="utf-8")
+        )
+
+    # Find champion
+    members = _registry.list_members()
+    if not members:
+        raise HTTPException(status_code=404, detail="No competitive league members exist.")
+    ratings = _ratings_map()
+    champ = _find_champion(members, ratings)
+    if champ is None:
+        raise HTTPException(status_code=404, detail="No competitive league members exist.")
+
+    results: list[dict] = []
+
+    # Champion
+    member_dir = _registry.load_member(champ["member_id"])
+    champ_agent_policy = "competitive_ppo"
+    champ_result = await asyncio.to_thread(
+        _benchmark_competitive_policy,
+        config,
+        champ_agent_policy,
+        req.episodes,
+        req.seed,
+    )
+    champ_result["policy"] = "league_champion"
+    results.append(champ_result)
+
+    # Baselines
+    for policy in COMPETITIVE_BASELINE_POLICIES:
+        res = await asyncio.to_thread(
+            _benchmark_competitive_policy, config, policy, req.episodes, req.seed,
+        )
+        res["policy"] = policy
+        results.append(res)
+
+    return {"champion": champ, "results": results}
+
+
+# ------------------------------------------------------------------
+# Champion robustness evaluation
+# ------------------------------------------------------------------
+
+
+class ChampionRobustnessRequest(BaseModel):
+    config_id: str = Field(default="default")
+    seeds: list[int] = Field(default=[42, 43, 44])
+    episodes_per_seed: int = Field(default=2, ge=1, le=10)
+    limit_sweeps: int | None = Field(default=None, ge=1)
+    seed: int = Field(default=42)
+
+
+@router.post("/champion/robustness")
+async def champion_robustness(req: ChampionRobustnessRequest) -> dict:
+    """Run a robustness sweep for the competitive league champion.
+
+    Returns the report_id and report_path.
+    """
+    # Load config
+    if req.config_id == "default":
+        config = default_competitive_config(seed=req.seed)
+    else:
+        config_path = CONFIGS_DIR / f"{req.config_id}.json"
+        if not config_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Config '{req.config_id}' not found."
+            )
+        config = CompetitiveEnvironmentConfig.model_validate_json(
+            config_path.read_text(encoding="utf-8")
+        )
+
+    # Find champion
+    members = _registry.list_members()
+    if not members:
+        raise HTTPException(status_code=404, detail="No competitive league members exist.")
+    ratings = _ratings_map()
+    champ = _find_champion(members, ratings)
+    if champ is None:
+        raise HTTPException(status_code=404, detail="No competitive league members exist.")
+
+    # Build policy set
+    specs = get_competitive_policy_specs(
+        league_root=LEAGUE_ROOT,
+        ppo_dir=COMPETITIVE_PPO_DIR,
+        top_k=0,
+    )
+
+    # Build and optionally cap sweeps
+    from simulation.evaluation.competitive_sweeps import build_competitive_default_sweeps
+    sweeps = build_competitive_default_sweeps(config)
+    if req.limit_sweeps is not None:
+        sweeps = sweeps[: req.limit_sweeps]
+
+    # Run robustness evaluation
+    result = await asyncio.to_thread(
+        run_competitive_robustness,
+        config,
+        specs,
+        req.seeds,
+        episodes_per_seed=req.episodes_per_seed,
+        sweeps=sweeps,
+    )
+
+    # Persist report
+    report_dir = write_competitive_report(result)
+
+    return {"report_id": report_dir.name, "report_path": str(report_dir)}
