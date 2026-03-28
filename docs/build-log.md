@@ -435,3 +435,32 @@
 **Verified:**
 - 266 total tests green (35 new + 231 existing)
 - Zero regressions
+
+
+#### Frontend: Complete Competitive UI
+**Built:**
+- `frontend/src/app/competitive/reports/page.tsx` — reports list
+- `frontend/src/app/competitive/reports/[report_id]/page.tsx` — report detail with heatmap, scatter, strategy groups
+- `frontend/src/components/CompetitiveRunSummary.tsx` — run summary with winner, rankings, scores
+- `frontend/src/components/CompetitiveReplayView.tsx` — replay with score/rank/action charts
+- Updated `frontend/src/app/run/[run_id]/page.tsx` — REST fallback + competitive/Mixed detection
+- Updated `frontend/src/app/replay/[run_id]/page.tsx` — competitive/Mixed detection
+- Updated `frontend/src/app/competitive/league/page.tsx` — full 4-tab league page
+- Updated `frontend/src/lib/api.ts` — all competitive API functions
+
+**Verified:**
+- Create config + start run works end to end
+- Live run page shows competitive summary after run completes
+- Replay works for both competitive and Mixed runs
+- League page all 4 tabs work correctly
+- Champion benchmark and robustness work
+- Reports list and detail pages work with heatmap populated
+- Mixed functionality unchanged
+
+#### Bug Fixes
+- Mixed evolution endpoint was using competitive strategy labels — fixed
+- Competitive nav links pointing to wrong paths — fixed
+- Champion benchmark endpoint missing — added
+- Robustness seeds schema mismatch — fixed
+- Heatmap data transformation — fixed
+- Replay crash on competitive runs — fixed
