@@ -107,6 +107,12 @@ export default function CompetitivePage() {
             League
           </Link>
           <Link
+            href="/competitive/reports"
+            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+          >
+            Reports
+          </Link>
+          <Link
             href="/runs"
             className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
           >

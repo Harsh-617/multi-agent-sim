@@ -680,6 +680,30 @@ export function getCompetitiveLeagueEvolution(): Promise<CompetitiveEvolutionRes
 }
 
 // ---------------------------------------------------------------------------
+// Competitive Reports
+// ---------------------------------------------------------------------------
+
+export interface CompetitiveReportListItem {
+  report_id: string;
+  kind: string;
+  config_hash: string;
+  timestamp: string;
+  path_name: string;
+}
+
+export function getCompetitiveReports(): Promise<CompetitiveReportListItem[]> {
+  return json(`${BASE}/competitive/reports`);
+}
+
+export function getCompetitiveReport(reportId: string): Promise<Record<string, unknown>> {
+  return json(`${BASE}/competitive/reports/${encodeURIComponent(reportId)}`);
+}
+
+export function getCompetitiveReportStrategies(reportId: string): Promise<StrategyResponse> {
+  return json(`${BASE}/competitive/reports/${encodeURIComponent(reportId)}/strategies`);
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 
