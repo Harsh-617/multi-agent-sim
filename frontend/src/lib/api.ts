@@ -585,6 +585,100 @@ export function getCompetitiveChampion(): Promise<CompetitiveChampionInfo> {
   return json(`${BASE}/competitive/league/champion`);
 }
 
+// Competitive Champion Benchmark
+
+export interface CompetitiveChampionBenchmarkResult {
+  policy: string;
+  mean_total_reward: number;
+  mean_final_score: number;
+  win_rate: number;
+  mean_episode_length: number;
+}
+
+export interface CompetitiveChampionBenchmarkResponse {
+  champion: CompetitiveChampionInfo;
+  results: CompetitiveChampionBenchmarkResult[];
+}
+
+export function runCompetitiveChampionBenchmark(
+  configId: string,
+  episodes: number = 10,
+  seed: number = 42,
+): Promise<CompetitiveChampionBenchmarkResponse> {
+  return json(`${BASE}/competitive/league/champion/benchmark`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config_id: configId, episodes, seed }),
+  });
+}
+
+// Competitive Champion Robustness
+
+export interface CompetitiveChampionRobustnessRequest {
+  config_id: string;
+  seeds?: number;
+  episodes_per_seed?: number;
+  limit_sweeps?: number | null;
+  seed?: number;
+}
+
+export interface CompetitiveChampionRobustnessResponse {
+  report_id: string;
+  report_path: string;
+}
+
+export function runCompetitiveChampionRobustness(
+  payload: CompetitiveChampionRobustnessRequest,
+): Promise<CompetitiveChampionRobustnessResponse> {
+  return json(`${BASE}/competitive/league/champion/robustness`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+// Start competitive league member run
+
+export function startCompetitiveLeagueMemberRun(
+  configId: string,
+  memberId: string,
+): Promise<{ run_id: string }> {
+  return json(`${BASE}/runs/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      config_id: configId,
+      agent_policy: "competitive_ppo",
+      league_member_id: memberId,
+    }),
+  });
+}
+
+// Competitive Evolution
+
+export interface CompetitiveEvolutionMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  rating: number;
+  strategy: {
+    cluster_id: number | null;
+    label: string;
+    features: Record<string, unknown>;
+  };
+  robustness_score: number | null;
+}
+
+export interface CompetitiveEvolutionResponse {
+  members: CompetitiveEvolutionMember[];
+  champion_history: ChampionHistoryEntry[];
+}
+
+export function getCompetitiveLeagueEvolution(): Promise<CompetitiveEvolutionResponse> {
+  return json(`${BASE}/competitive/league/evolution`);
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
