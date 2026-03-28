@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   LeagueMember,
   LeagueRating,
@@ -16,33 +15,465 @@ import {
   listConfigs,
   startRun,
   ConfigListItem,
+  CompetitiveLeagueMember,
+  CompetitiveLeagueRating,
+  CompetitiveEvolutionMember,
+  CompetitiveEvolutionResponse,
+  CompetitiveChampionBenchmarkResponse,
+  CompetitiveChampionBenchmarkResult,
+  CompetitiveChampionRobustnessRequest,
+  ChampionHistoryEntry,
+  getCompetitiveLeagueMembers,
+  getCompetitiveLeagueRatings,
+  getCompetitiveLeagueEvolution,
+  recomputeCompetitiveLeagueRatings,
+  runCompetitiveChampionBenchmark,
+  runCompetitiveChampionRobustness,
+  startCompetitiveLeagueMemberRun,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
 import ChampionRobustness from "@/components/ChampionRobustness";
 import LeagueEvolution from "@/components/LeagueEvolution";
 
-type Tab = "members" | "lineage" | "benchmark" | "robustness" | "evolution";
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type Archetype = "resource-sharing" | "head-to-head";
+type Tab = "ratings" | "lineage" | "champion" | "evolution";
+
+// ---------------------------------------------------------------------------
+// Competitive helpers (copied from competitive/league/page.tsx)
+// ---------------------------------------------------------------------------
+
+const COMP_LABEL_COLOR: Record<string, string> = {
+  Dominant: "#f59e0b",
+  Aggressive: "#ef4444",
+  Consistent: "#22c55e",
+  Weak: "#9ca3af",
+  Competitive: "#3b82f6",
+};
+
+function compLabelColor(label: string): string {
+  return COMP_LABEL_COLOR[label] ?? "#9ca3af";
+}
+
+// Lineage SVG helpers
+
+interface CompLineageNode {
+  id: string;
+  parent_id: string | null;
+  rating: number;
+  label: string;
+  created_at: string | null;
+  notes: string | null;
+  children: CompLineageNode[];
+  depth: number;
+  x: number;
+  y: number;
+}
+
+function buildCompLineageForest(
+  members: CompetitiveEvolutionMember[],
+): CompLineageNode[] {
+  const byId = new Map<string, CompetitiveEvolutionMember>();
+  for (const m of members) byId.set(m.member_id, m);
+
+  const childrenMap = new Map<string, string[]>();
+  const roots: string[] = [];
+
+  for (const m of members) {
+    if (m.parent_id && byId.has(m.parent_id)) {
+      const siblings = childrenMap.get(m.parent_id) || [];
+      siblings.push(m.member_id);
+      childrenMap.set(m.parent_id, siblings);
+    } else {
+      roots.push(m.member_id);
+    }
+  }
+
+  function build(id: string, depth: number): CompLineageNode {
+    const m = byId.get(id)!;
+    const kids = (childrenMap.get(id) || []).map((cid) =>
+      build(cid, depth + 1),
+    );
+    return {
+      id: m.member_id,
+      parent_id: m.parent_id,
+      rating: m.rating,
+      label: m.strategy.label,
+      created_at: m.created_at,
+      notes: m.notes,
+      children: kids,
+      depth,
+      x: 0,
+      y: 0,
+    };
+  }
+
+  return roots.map((id) => build(id, 0));
+}
+
+function flattenCompLineageNodes(forest: CompLineageNode[]): CompLineageNode[] {
+  const all: CompLineageNode[] = [];
+  function walk(n: CompLineageNode) {
+    all.push(n);
+    n.children.forEach(walk);
+  }
+  forest.forEach(walk);
+  return all;
+}
+
+function layoutCompLineageTree(forest: CompLineageNode[]): {
+  nodes: CompLineageNode[];
+  width: number;
+  height: number;
+} {
+  const nodes = flattenCompLineageNodes(forest);
+  if (nodes.length === 0) return { nodes: [], width: 0, height: 0 };
+
+  const byDepth = new Map<number, CompLineageNode[]>();
+  for (const n of nodes) {
+    const group = byDepth.get(n.depth) || [];
+    group.push(n);
+    byDepth.set(n.depth, group);
+  }
+
+  const maxDepth = Math.max(...nodes.map((n) => n.depth));
+  const nodeSpacingX = 120;
+  const nodeSpacingY = 80;
+  const padX = 60;
+  const padY = 40;
+
+  let maxWidth = 0;
+  for (let d = 0; d <= maxDepth; d++) {
+    const group = byDepth.get(d) || [];
+    for (let i = 0; i < group.length; i++) {
+      group[i].x = padX + i * nodeSpacingX;
+      group[i].y = padY + d * nodeSpacingY;
+    }
+    maxWidth = Math.max(maxWidth, group.length * nodeSpacingX);
+  }
+
+  return {
+    nodes,
+    width: maxWidth + padX * 2,
+    height: (maxDepth + 1) * nodeSpacingY + padY * 2,
+  };
+}
+
+// Bar chart for competitive benchmark
+
+const COMP_BAR_COLORS: Record<string, string> = {
+  league_champion: "#8b5cf6",
+  random: "#6b7280",
+  always_attack: "#ef4444",
+  always_build: "#22c55e",
+  always_defend: "#3b82f6",
+  competitive_ppo: "#f59e0b",
+};
+
+function CompetitiveBarChart({
+  results,
+}: {
+  results: CompetitiveChampionBenchmarkResult[];
+}) {
+  if (results.length === 0) return null;
+
+  const maxVal = Math.max(
+    ...results.map((r) => Math.abs(r.mean_total_reward)),
+    0.01,
+  );
+  const barW = 50;
+  const barGap = 12;
+  const chartH = 140;
+  const chartW = results.length * (barW + barGap);
+  const labelH = 48;
+
+  return (
+    <svg width={chartW} height={chartH + labelH} className="block">
+      {results.map((r, i) => {
+        const h = (Math.abs(r.mean_total_reward) / maxVal) * chartH;
+        const x = i * (barW + barGap);
+        const color = COMP_BAR_COLORS[r.policy] || "#6b7280";
+        return (
+          <g key={r.policy}>
+            <rect
+              x={x}
+              y={chartH - h}
+              width={barW}
+              height={h}
+              fill={color}
+              rx={3}
+            />
+            <text
+              x={x + barW / 2}
+              y={chartH - h - 4}
+              textAnchor="middle"
+              fontSize={10}
+              fill="currentColor"
+            >
+              {r.mean_total_reward.toFixed(2)}
+            </text>
+            <text
+              x={x + barW / 2}
+              y={chartH + 14}
+              textAnchor="middle"
+              fontSize={9}
+              fill="currentColor"
+            >
+              {r.policy.replace("_", " ")}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Competitive lineage SVG component
+
+function CompLineageSVG({
+  members,
+  onSelect,
+  selectedId,
+}: {
+  members: CompetitiveEvolutionMember[];
+  onSelect: (m: CompetitiveEvolutionMember | null) => void;
+  selectedId: string | null;
+}) {
+  if (members.length === 0) {
+    return <p className="text-gray-500 text-sm">No members to display.</p>;
+  }
+
+  const forest = buildCompLineageForest(members);
+  const { nodes, width, height } = layoutCompLineageTree(forest);
+
+  const ratings = members.map((m) => m.rating);
+  const minR = ratings.length > 0 ? Math.min(...ratings) : 0;
+  const maxR = ratings.length > 0 ? Math.max(...ratings) : 1;
+  const rangeR = maxR - minR || 1;
+
+  function nodeRadius(rating: number) {
+    return 10 + ((rating - minR) / rangeR) * 10;
+  }
+
+  function strokeThickness(rating: number) {
+    return 1 + ((rating - minR) / rangeR) * 2;
+  }
+
+  const nodeById = new Map<string, CompLineageNode>();
+  for (const n of nodes) nodeById.set(n.id, n);
+
+  const edges: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  for (const n of nodes) {
+    if (n.parent_id && nodeById.has(n.parent_id)) {
+      const parent = nodeById.get(n.parent_id)!;
+      edges.push({ x1: parent.x, y1: parent.y, x2: n.x, y2: n.y });
+    }
+  }
+
+  const memberById = new Map<string, CompetitiveEvolutionMember>();
+  for (const m of members) memberById.set(m.member_id, m);
+
+  const suffix = (id: string) => id.slice(-6);
+
+  return (
+    <>
+      {/* Legend */}
+      <div className="flex gap-4 mb-2 text-xs">
+        {Object.entries(COMP_LABEL_COLOR).map(([label, color]) => (
+          <span key={label} className="flex items-center gap-1">
+            <span
+              style={{
+                background: color,
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+              }}
+            />
+            {label}
+          </span>
+        ))}
+      </div>
+
+      <div className="overflow-auto border border-gray-200 rounded">
+        <svg
+          width={Math.max(width, 200)}
+          height={Math.max(height, 120)}
+          className="block"
+        >
+          {edges.map((e, i) => (
+            <line
+              key={i}
+              x1={e.x1}
+              y1={e.y1}
+              x2={e.x2}
+              y2={e.y2}
+              stroke="#9ca3af"
+              strokeWidth={1.5}
+            />
+          ))}
+          {nodes.map((n) => {
+            const r = nodeRadius(n.rating);
+            const sw = strokeThickness(n.rating);
+            const isSelected = selectedId === n.id;
+            const fill = compLabelColor(n.label);
+            return (
+              <g
+                key={n.id}
+                onClick={() => onSelect(memberById.get(n.id) ?? null)}
+                className="cursor-pointer"
+              >
+                <circle
+                  cx={n.x}
+                  cy={n.y}
+                  r={r}
+                  fill={fill}
+                  stroke={isSelected ? "#000" : "#6b7280"}
+                  strokeWidth={isSelected ? 2.5 : sw}
+                  opacity={0.9}
+                />
+                <text
+                  x={n.x}
+                  y={n.y + r + 14}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill="currentColor"
+                >
+                  {suffix(n.id)}
+                </text>
+                <text
+                  x={n.x}
+                  y={n.y + 4}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="#fff"
+                  fontWeight="bold"
+                >
+                  {n.rating.toFixed(0)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </>
+  );
+}
+
+// Competitive timeline entry
+
+function CompetitiveTimelineEntry({
+  entry,
+  idx,
+}: {
+  entry: ChampionHistoryEntry;
+  idx: number;
+}) {
+  return (
+    <li className="border border-gray-200 rounded p-2 text-xs">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-gray-400 font-mono">#{idx + 1}</span>
+        <span
+          className="font-medium"
+          style={{ color: compLabelColor(entry.label) }}
+        >
+          {entry.label}
+        </span>
+        {entry.cluster_id != null && (
+          <span className="text-gray-400">cluster {entry.cluster_id}</span>
+        )}
+      </div>
+      <div
+        className="font-mono text-gray-700 mb-1 truncate"
+        title={entry.member_id}
+      >
+        {entry.member_id}
+      </div>
+      <div className="flex gap-3 text-gray-600">
+        <span>
+          Rating:{" "}
+          <span className="font-medium">{entry.rating.toFixed(1)}</span>
+        </span>
+        {entry.robustness_score != null && (
+          <span>
+            Robust:{" "}
+            <span className="font-medium">
+              {entry.robustness_score.toFixed(3)}
+            </span>
+          </span>
+        )}
+      </div>
+      {entry.created_at && (
+        <div className="text-gray-400 mt-1">
+          {new Date(entry.created_at).toLocaleString()}
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function LeaguePage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("members");
-  const [members, setMembers] = useState<LeagueMember[]>([]);
-  const [lineageMembers, setLineageMembers] = useState<LineageMember[]>([]);
-  const [ratings, setRatings] = useState<Map<string, number>>(new Map());
-  const [configs, setConfigs] = useState<ConfigListItem[]>([]);
-  const [evolutionData, setEvolutionData] = useState<LeagueEvolutionResponse>({
+  const [archetype, setArchetype] = useState<Archetype>("resource-sharing");
+  const [tab, setTab] = useState<Tab>("ratings");
+
+  // --- Resource Sharing (Mixed) state ---
+  const [rsMembers, setRsMembers] = useState<LeagueMember[]>([]);
+  const [rsLineageMembers, setRsLineageMembers] = useState<LineageMember[]>([]);
+  const [rsRatings, setRsRatings] = useState<Map<string, number>>(new Map());
+  const [rsConfigs, setRsConfigs] = useState<ConfigListItem[]>([]);
+  const [rsEvolutionData, setRsEvolutionData] = useState<LeagueEvolutionResponse>({
     members: [],
     champion_history: [],
   });
-  const [loading, setLoading] = useState(true);
-  const [recomputing, setRecomputing] = useState(false);
-  const [startingId, setStartingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [rsLoading, setRsLoading] = useState(true);
+  const [rsRecomputing, setRsRecomputing] = useState(false);
+  const [rsStartingId, setRsStartingId] = useState<string | null>(null);
+  const [rsError, setRsError] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
-    setError(null);
+  // --- Head-to-Head (Competitive) state ---
+  const [hhMembers, setHhMembers] = useState<CompetitiveLeagueMember[]>([]);
+  const [hhRatings, setHhRatings] = useState<Map<string, number>>(new Map());
+  const [hhConfigs, setHhConfigs] = useState<ConfigListItem[]>([]);
+  const [hhEvolutionData, setHhEvolutionData] =
+    useState<CompetitiveEvolutionResponse>({
+      members: [],
+      champion_history: [],
+    });
+  const [hhLoading, setHhLoading] = useState(true);
+  const [hhRecomputing, setHhRecomputing] = useState(false);
+  const [hhStartingId, setHhStartingId] = useState<string | null>(null);
+  const [hhError, setHhError] = useState<string | null>(null);
+
+  // Competitive champion tab state
+  const [hhBenchConfigId, setHhBenchConfigId] = useState("");
+  const [hhBenchEpisodes, setHhBenchEpisodes] = useState(5);
+  const [hhBenchRunning, setHhBenchRunning] = useState(false);
+  const [hhBenchData, setHhBenchData] =
+    useState<CompetitiveChampionBenchmarkResponse | null>(null);
+  const [hhRobConfigId, setHhRobConfigId] = useState("default");
+  const [hhRobSeeds, setHhRobSeeds] = useState(3);
+  const [hhRobEpisodesPerSeed, setHhRobEpisodesPerSeed] = useState(2);
+  const [hhRobLimitSweeps, setHhRobLimitSweeps] = useState<string>("");
+  const [hhRobSeed, setHhRobSeed] = useState(42);
+  const [hhRobRunning, setHhRobRunning] = useState(false);
+
+  // Competitive lineage/evolution selection
+  const [hhSelectedEvolution, setHhSelectedEvolution] =
+    useState<CompetitiveEvolutionMember | null>(null);
+
+  // --- Load Resource Sharing data ---
+  async function loadResourceSharing() {
+    setRsLoading(true);
+    setRsError(null);
     try {
       const [m, r, c, lin, evo] = await Promise.all([
         listLeagueMembers(),
@@ -51,77 +482,291 @@ export default function LeaguePage() {
         getLeagueLineage(),
         getLeagueEvolution(),
       ]);
-      setMembers(m);
-      setRatings(new Map(r.map((x) => [x.member_id, x.rating])));
-      setConfigs(c);
-      setLineageMembers(lin.members);
-      setEvolutionData(evo);
+      setRsMembers(m);
+      setRsRatings(new Map(r.map((x) => [x.member_id, x.rating])));
+      setRsConfigs(c);
+      setRsLineageMembers(lin.members);
+      setRsEvolutionData(evo);
     } catch (e) {
-      setError(String(e));
+      setRsError(String(e));
     } finally {
-      setLoading(false);
+      setRsLoading(false);
+    }
+  }
+
+  // --- Load Head-to-Head data ---
+  async function loadHeadToHead() {
+    setHhLoading(true);
+    setHhError(null);
+    try {
+      const [m, r, c, evo] = await Promise.all([
+        getCompetitiveLeagueMembers(),
+        getCompetitiveLeagueRatings(),
+        listConfigs(),
+        getCompetitiveLeagueEvolution(),
+      ]);
+      setHhMembers(m);
+      setHhRatings(new Map(r.map((x) => [x.member_id, x.rating])));
+      setHhConfigs(c);
+      setHhEvolutionData(evo);
+      if (c.length > 0 && !hhBenchConfigId) {
+        setHhBenchConfigId(c[0].config_id);
+      }
+    } catch (e) {
+      setHhError(String(e));
+    } finally {
+      setHhLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    loadResourceSharing();
+    loadHeadToHead();
   }, []);
 
-  async function handleRecompute() {
-    setRecomputing(true);
-    setError(null);
+  // --- Resource Sharing handlers ---
+  async function handleRsRecompute() {
+    setRsRecomputing(true);
+    setRsError(null);
     try {
       const r = await recomputeLeagueRatings();
-      setRatings(new Map(r.map((x) => [x.member_id, x.rating])));
-      // Refresh lineage too
+      setRsRatings(new Map(r.map((x) => [x.member_id, x.rating])));
       const lin = await getLeagueLineage();
-      setLineageMembers(lin.members);
+      setRsLineageMembers(lin.members);
     } catch (e) {
-      setError(String(e));
+      setRsError(String(e));
     } finally {
-      setRecomputing(false);
+      setRsRecomputing(false);
     }
   }
 
-  async function handleRun(memberId: string) {
-    if (configs.length === 0) {
-      setError("No configs available. Create one on the home page first.");
+  async function handleRsRun(memberId: string) {
+    if (rsConfigs.length === 0) {
+      setRsError("No configs available. Create one on the home page first.");
       return;
     }
-    setStartingId(memberId);
-    setError(null);
+    setRsStartingId(memberId);
+    setRsError(null);
     try {
-      const { run_id } = await startRun(configs[0].config_id, "league_snapshot", memberId);
-      router.push(`/run/${run_id}`);
+      const { run_id } = await startRun(rsConfigs[0].config_id, "league_snapshot", memberId);
+      router.push(`/simulate/resource-sharing/run/${run_id}`);
     } catch (e) {
-      setError(String(e));
-      setStartingId(null);
+      setRsError(String(e));
+      setRsStartingId(null);
     }
   }
 
-  // Sort members by rating (descending), then by id
-  const sorted = [...members].sort((a, b) => {
-    const ra = ratings.get(a.member_id) ?? 0;
-    const rb = ratings.get(b.member_id) ?? 0;
+  // --- Head-to-Head handlers ---
+  async function handleHhRecompute() {
+    setHhRecomputing(true);
+    setHhError(null);
+    try {
+      const r = await recomputeCompetitiveLeagueRatings();
+      setHhRatings(new Map(r.map((x) => [x.member_id, x.rating])));
+      const evo = await getCompetitiveLeagueEvolution();
+      setHhEvolutionData(evo);
+    } catch (e) {
+      setHhError(String(e));
+    } finally {
+      setHhRecomputing(false);
+    }
+  }
+
+  async function handleHhRun(memberId: string) {
+    if (hhConfigs.length === 0) {
+      setHhError("No configs available. Create one on the home page first.");
+      return;
+    }
+    setHhStartingId(memberId);
+    setHhError(null);
+    try {
+      const { run_id } = await startCompetitiveLeagueMemberRun(
+        hhConfigs[0].config_id,
+        memberId,
+      );
+      router.push(`/simulate/head-to-head/run/${run_id}`);
+    } catch (e) {
+      setHhError(String(e));
+      setHhStartingId(null);
+    }
+  }
+
+  async function handleHhBenchmark() {
+    if (!hhBenchConfigId) {
+      setHhError("Select a config first.");
+      return;
+    }
+    setHhBenchRunning(true);
+    setHhError(null);
+    setHhBenchData(null);
+    try {
+      const resp = await runCompetitiveChampionBenchmark(
+        hhBenchConfigId,
+        hhBenchEpisodes,
+      );
+      setHhBenchData(resp);
+    } catch (e) {
+      setHhError(String(e));
+    } finally {
+      setHhBenchRunning(false);
+    }
+  }
+
+  async function handleHhRobustness() {
+    setHhRobRunning(true);
+    setHhError(null);
+    try {
+      const payload: CompetitiveChampionRobustnessRequest = {
+        config_id: hhRobConfigId,
+        seeds: [hhRobSeeds],
+        episodes_per_seed: hhRobEpisodesPerSeed,
+        seed: hhRobSeed,
+        ...(hhRobLimitSweeps !== ""
+          ? { limit_sweeps: Number(hhRobLimitSweeps) }
+          : {}),
+      };
+      const resp = await runCompetitiveChampionRobustness(payload);
+      router.push(`/competitive/reports/${resp.report_id}`);
+    } catch (e) {
+      setHhError(String(e));
+      setHhRobRunning(false);
+    }
+  }
+
+  // --- Derived values ---
+  const isRS = archetype === "resource-sharing";
+  const loading = isRS ? rsLoading : hhLoading;
+  const error = isRS ? rsError : hhError;
+  const recomputing = isRS ? rsRecomputing : hhRecomputing;
+  const members = isRS ? rsMembers : hhMembers;
+  const ratings = isRS ? rsRatings : hhRatings;
+
+  // Sorted members for ratings tab
+  const rsSorted = [...rsMembers].sort((a, b) => {
+    const ra = rsRatings.get(a.member_id) ?? 0;
+    const rb = rsRatings.get(b.member_id) ?? 0;
     return rb - ra || a.member_id.localeCompare(b.member_id);
   });
 
-  const tabClass = (t: Tab) =>
-    `px-4 py-2 text-sm font-medium rounded-t ${
-      tab === t
-        ? "bg-white border border-b-0 border-gray-300"
-        : "text-gray-500 hover:text-gray-700"
-    }`;
+  const hhSorted = [...hhMembers].sort((a, b) => {
+    const ra = hhRatings.get(a.member_id) ?? 0;
+    const rb = hhRatings.get(b.member_id) ?? 0;
+    return rb - ra || a.member_id.localeCompare(b.member_id);
+  });
+
+  // Head-to-Head champion (highest rated)
+  const hhChampion: CompetitiveLeagueMember | null =
+    hhSorted.length > 0 ? hhSorted[0] : null;
+  const hhChampionRating = hhChampion ? hhRatings.get(hhChampion.member_id) : null;
+
+  function handleArchetypeSwitch(a: Archetype) {
+    if (a !== archetype) {
+      setArchetype(a);
+      setTab("ratings");
+    }
+  }
+
+  // --- Styles ---
+  const pillBase: React.CSSProperties = {
+    borderRadius: "9999px",
+    padding: "6px 16px",
+    fontSize: "13px",
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "all 150ms",
+  };
+
+  const pillActive: React.CSSProperties = {
+    ...pillBase,
+    background: "var(--accent)",
+    color: "white",
+    border: "1px solid transparent",
+  };
+
+  const pillInactive: React.CSSProperties = {
+    ...pillBase,
+    background: "transparent",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--bg-border)",
+  };
+
+  const subTabBase: React.CSSProperties = {
+    fontSize: "13px",
+    fontWeight: 500,
+    padding: "8px 0",
+    marginRight: "24px",
+    cursor: "pointer",
+    background: "none",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    transition: "all 150ms",
+  };
+
+  const subTabActive: React.CSSProperties = {
+    ...subTabBase,
+    color: "var(--text-primary)",
+    borderBottomColor: "var(--accent)",
+  };
+
+  const subTabInactive: React.CSSProperties = {
+    ...subTabBase,
+    color: "var(--text-secondary)",
+  };
 
   return (
-    <main className="max-w-5xl mx-auto p-8">
-      <div className="flex items-center gap-4 mb-6">
-        <Link href="/" className="text-blue-500 hover:underline text-sm">
-          &larr; Home
-        </Link>
-        <h1 className="text-2xl font-bold">League</h1>
+    <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "48px 24px" }}>
+      {/* Header */}
+      <div style={{ marginBottom: "8px" }}>
+        <h1 style={{ fontSize: "24px", fontWeight: 500, color: "var(--text-primary)", margin: 0 }}>
+          League
+        </h1>
+        <p style={{ fontSize: "14px", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
+          Elo-rated agent leagues across all environments
+        </p>
+      </div>
+
+      {/* Archetype switcher */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "24px", marginTop: "16px" }}>
         <button
-          onClick={handleRecompute}
+          style={archetype === "resource-sharing" ? pillActive : pillInactive}
+          onClick={() => handleArchetypeSwitch("resource-sharing")}
+          onMouseEnter={(e) => {
+            if (archetype !== "resource-sharing") {
+              e.currentTarget.style.color = "var(--text-primary)";
+              e.currentTarget.style.borderColor = "var(--accent)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (archetype !== "resource-sharing") {
+              e.currentTarget.style.color = "var(--text-secondary)";
+              e.currentTarget.style.borderColor = "var(--bg-border)";
+            }
+          }}
+        >
+          Resource Sharing
+        </button>
+        <button
+          style={archetype === "head-to-head" ? pillActive : pillInactive}
+          onClick={() => handleArchetypeSwitch("head-to-head")}
+          onMouseEnter={(e) => {
+            if (archetype !== "head-to-head") {
+              e.currentTarget.style.color = "var(--text-primary)";
+              e.currentTarget.style.borderColor = "var(--accent)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (archetype !== "head-to-head") {
+              e.currentTarget.style.color = "var(--text-secondary)";
+              e.currentTarget.style.borderColor = "var(--bg-border)";
+            }
+          }}
+        >
+          Head-to-Head
+        </button>
+
+        {/* Recompute Ratings button */}
+        <button
+          onClick={isRS ? handleRsRecompute : handleHhRecompute}
           disabled={recomputing || members.length === 0}
           className="ml-auto px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50"
         >
@@ -129,115 +774,597 @@ export default function LeaguePage() {
         </button>
       </div>
 
-      {error && <p className="text-red-500 mb-2 text-sm">{error}</p>}
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-300 mb-4">
-        <button className={tabClass("members")} onClick={() => setTab("members")}>
-          Members
-        </button>
-        <button className={tabClass("lineage")} onClick={() => setTab("lineage")}>
-          Lineage
-        </button>
-        <button className={tabClass("benchmark")} onClick={() => setTab("benchmark")}>
-          Champion Benchmark
-        </button>
-        <button className={tabClass("robustness")} onClick={() => setTab("robustness")}>
-          Robustness
-        </button>
-        <button className={tabClass("evolution")} onClick={() => setTab("evolution")}>
-          Evolution
-        </button>
+      {/* Sub-tabs */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--bg-border)", marginBottom: "32px" }}>
+        {(["ratings", "lineage", "champion", "evolution"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            style={tab === t ? subTabActive : subTabInactive}
+            onClick={() => setTab(t)}
+            onMouseEnter={(e) => {
+              if (tab !== t) e.currentTarget.style.color = "var(--text-primary)";
+            }}
+            onMouseLeave={(e) => {
+              if (tab !== t) e.currentTarget.style.color = "var(--text-secondary)";
+            }}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
       </div>
 
+      {error && <p className="text-red-500 mb-2 text-sm">{error}</p>}
+
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <p style={{ color: "var(--text-secondary)" }}>Loading...</p>
       ) : (
         <>
-          {/* Members tab */}
-          {tab === "members" && (
-            sorted.length === 0 ? (
-              <p className="text-gray-500">
-                No league members yet. Train a policy and save a snapshot to get started.
-              </p>
-            ) : (
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-300">
-                    <th className="py-2 pr-4">#</th>
-                    <th className="py-2 pr-4">Member ID</th>
-                    <th className="py-2 pr-4">Rating</th>
-                    <th className="py-2 pr-4">Parent</th>
-                    <th className="py-2 pr-4">Created</th>
-                    <th className="py-2 pr-4">Notes</th>
-                    <th className="py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((m, idx) => (
-                    <tr key={m.member_id} className="border-b border-gray-200">
-                      <td className="py-2 pr-4 text-gray-400">{idx + 1}</td>
-                      <td className="py-2 pr-4 font-mono">{m.member_id}</td>
-                      <td className="py-2 pr-4 font-mono">
-                        {ratings.has(m.member_id)
-                          ? ratings.get(m.member_id)!.toFixed(1)
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-4 font-mono text-xs">
-                        {m.parent_id ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs text-gray-500">
-                        {m.created_at
-                          ? new Date(m.created_at).toLocaleString()
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">{m.notes ?? "—"}</td>
-                      <td className="py-2">
+          {/* ============================================================ */}
+          {/* RESOURCE SHARING CONTENT                                      */}
+          {/* ============================================================ */}
+          {isRS && (
+            <>
+              {/* Ratings tab */}
+              {tab === "ratings" && (
+                rsSorted.length === 0 ? (
+                  <p className="text-gray-500">
+                    No league members yet. Train a policy and save a snapshot to get started.
+                  </p>
+                ) : (
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-300">
+                        <th className="py-2 pr-4">#</th>
+                        <th className="py-2 pr-4">Member ID</th>
+                        <th className="py-2 pr-4">Rating</th>
+                        <th className="py-2 pr-4">Parent</th>
+                        <th className="py-2 pr-4">Created</th>
+                        <th className="py-2 pr-4">Notes</th>
+                        <th className="py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rsSorted.map((m, idx) => (
+                        <tr key={m.member_id} className="border-b border-gray-200">
+                          <td className="py-2 pr-4 text-gray-400">{idx + 1}</td>
+                          <td className="py-2 pr-4 font-mono">{m.member_id}</td>
+                          <td className="py-2 pr-4 font-mono">
+                            {rsRatings.has(m.member_id)
+                              ? rsRatings.get(m.member_id)!.toFixed(1)
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-xs">
+                            {m.parent_id ?? "—"}
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-gray-500">
+                            {m.created_at
+                              ? new Date(m.created_at).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-4 text-xs">{m.notes ?? "—"}</td>
+                          <td className="py-2">
+                            <button
+                              onClick={() => handleRsRun(m.member_id)}
+                              disabled={rsStartingId !== null}
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50"
+                            >
+                              {rsStartingId === m.member_id ? "Starting..." : "Run"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {/* Lineage tab */}
+              {tab === "lineage" && (
+                <LeagueLineage members={rsLineageMembers} />
+              )}
+
+              {/* Champion tab */}
+              {tab === "champion" && (
+                rsConfigs.length === 0 ? (
+                  <p className="text-gray-500">
+                    No configs available. Create one on the home page first.
+                  </p>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Champion Benchmark</h3>
+                      <ChampionBenchmark configs={rsConfigs} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Run Robustness on Champion</h3>
+                      {rsMembers.length === 0 ? (
+                        <p className="text-gray-500">
+                          No league members yet. Train a policy and save a snapshot to get started.
+                        </p>
+                      ) : (
+                        <ChampionRobustness configs={rsConfigs} />
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* Evolution tab */}
+              {tab === "evolution" && (
+                <LeagueEvolution data={rsEvolutionData} />
+              )}
+            </>
+          )}
+
+          {/* ============================================================ */}
+          {/* HEAD-TO-HEAD CONTENT                                          */}
+          {/* ============================================================ */}
+          {!isRS && (
+            <>
+              {/* Ratings tab */}
+              {tab === "ratings" &&
+                (hhSorted.length === 0 ? (
+                  <p className="text-gray-500">
+                    No league members yet &mdash; run the pipeline first.
+                  </p>
+                ) : (
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-300">
+                        <th className="py-2 pr-4">#</th>
+                        <th className="py-2 pr-4">Member ID</th>
+                        <th className="py-2 pr-4">Rating</th>
+                        <th className="py-2 pr-4">Parent</th>
+                        <th className="py-2 pr-4">Created</th>
+                        <th className="py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hhSorted.map((m, idx) => (
+                        <tr key={m.member_id} className="border-b border-gray-200">
+                          <td className="py-2 pr-4 text-gray-400">{idx + 1}</td>
+                          <td className="py-2 pr-4 font-mono">{m.member_id}</td>
+                          <td className="py-2 pr-4 font-mono">
+                            {hhRatings.has(m.member_id)
+                              ? hhRatings.get(m.member_id)!.toFixed(1)
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-xs">
+                            {m.parent_id ?? "—"}
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-gray-500">
+                            {m.created_at
+                              ? new Date(m.created_at).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="py-2">
+                            <button
+                              onClick={() => handleHhRun(m.member_id)}
+                              disabled={hhStartingId !== null}
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50"
+                            >
+                              {hhStartingId === m.member_id
+                                ? "Starting..."
+                                : "Run"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ))}
+
+              {/* Lineage tab */}
+              {tab === "lineage" && (
+                <div className="flex gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold mb-2">Lineage Graph</h3>
+                    <CompLineageSVG
+                      members={hhEvolutionData.members}
+                      onSelect={setHhSelectedEvolution}
+                      selectedId={hhSelectedEvolution?.member_id ?? null}
+                    />
+
+                    {hhSelectedEvolution && (
+                      <div className="border border-gray-200 rounded p-3 text-sm mt-3">
+                        <h4 className="font-bold mb-2">Details</h4>
+                        <dl className="space-y-1">
+                          <dt className="text-gray-500">Member ID</dt>
+                          <dd className="font-mono text-xs">
+                            {hhSelectedEvolution.member_id}
+                          </dd>
+                          <dt className="text-gray-500">Label</dt>
+                          <dd>
+                            <span
+                              className="font-medium"
+                              style={{
+                                color: compLabelColor(
+                                  hhSelectedEvolution.strategy.label,
+                                ),
+                              }}
+                            >
+                              {hhSelectedEvolution.strategy.label}
+                            </span>
+                          </dd>
+                          <dt className="text-gray-500">Rating</dt>
+                          <dd>{hhSelectedEvolution.rating.toFixed(1)}</dd>
+                          <dt className="text-gray-500">Parent</dt>
+                          <dd className="font-mono text-xs">
+                            {hhSelectedEvolution.parent_id ?? "none"}
+                          </dd>
+                          <dt className="text-gray-500">Cluster</dt>
+                          <dd>
+                            {hhSelectedEvolution.strategy.cluster_id ?? "—"}
+                          </dd>
+                          <dt className="text-gray-500">Robustness</dt>
+                          <dd>
+                            {hhSelectedEvolution.robustness_score != null
+                              ? hhSelectedEvolution.robustness_score.toFixed(3)
+                              : "—"}
+                          </dd>
+                          <dt className="text-gray-500">Created</dt>
+                          <dd className="text-xs">
+                            {hhSelectedEvolution.created_at
+                              ? new Date(
+                                  hhSelectedEvolution.created_at,
+                                ).toLocaleString()
+                              : "—"}
+                          </dd>
+                        </dl>
                         <button
-                          onClick={() => handleRun(m.member_id)}
-                          disabled={startingId !== null}
-                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50"
+                          onClick={() => setHhSelectedEvolution(null)}
+                          className="mt-2 text-xs text-blue-500 hover:underline"
                         >
-                          {startingId === m.member_id ? "Starting..." : "Run"}
+                          Close
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )
-          )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-          {/* Lineage tab */}
-          {tab === "lineage" && (
-            <LeagueLineage members={lineageMembers} />
-          )}
+              {/* Champion tab */}
+              {tab === "champion" && (
+                <div className="space-y-6">
+                  {/* Champion info */}
+                  {hhChampion ? (
+                    <div className="border border-gray-200 rounded p-4 text-sm">
+                      <h3 className="font-semibold mb-2">Current Champion</h3>
+                      <dl className="grid grid-cols-2 gap-x-6 gap-y-1">
+                        <dt className="text-gray-500">Member ID</dt>
+                        <dd className="font-mono text-xs">{hhChampion.member_id}</dd>
+                        <dt className="text-gray-500">Rating</dt>
+                        <dd className="font-mono">
+                          {hhChampionRating != null
+                            ? hhChampionRating.toFixed(1)
+                            : "—"}
+                        </dd>
+                        <dt className="text-gray-500">Parent</dt>
+                        <dd className="font-mono text-xs">
+                          {hhChampion.parent_id ?? "none"}
+                        </dd>
+                      </dl>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">
+                      No league members yet &mdash; run the pipeline first.
+                    </p>
+                  )}
 
-          {/* Champion Benchmark tab */}
-          {tab === "benchmark" && (
-            configs.length === 0 ? (
-              <p className="text-gray-500">
-                No configs available. Create one on the home page first.
-              </p>
-            ) : (
-              <ChampionBenchmark configs={configs} />
-            )
-          )}
+                  {/* Benchmark section */}
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">
+                      Champion Benchmark
+                    </h3>
+                    <div className="flex items-end gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Config
+                        </label>
+                        <select
+                          value={hhBenchConfigId}
+                          onChange={(e) => setHhBenchConfigId(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          {hhConfigs.map((c) => (
+                            <option key={c.config_id} value={c.config_id}>
+                              {c.config_id} (agents={c.num_agents}, steps=
+                              {c.max_steps})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Episodes
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={hhBenchEpisodes}
+                          onChange={(e) =>
+                            setHhBenchEpisodes(Number(e.target.value))
+                          }
+                          className="border rounded px-2 py-1 text-sm w-16"
+                        />
+                      </div>
+                      <button
+                        onClick={handleHhBenchmark}
+                        disabled={
+                          hhBenchRunning ||
+                          hhConfigs.length === 0 ||
+                          hhMembers.length === 0
+                        }
+                        className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm disabled:opacity-50"
+                      >
+                        {hhBenchRunning ? "Running..." : "Run Champion Benchmark"}
+                      </button>
+                    </div>
 
-          {/* Robustness tab */}
-          {tab === "robustness" && (
-            members.length === 0 ? (
-              <p className="text-gray-500">
-                No league members yet. Train a policy and save a snapshot to get started.
-              </p>
-            ) : (
-              <ChampionRobustness configs={configs} />
-            )
-          )}
+                    {hhBenchData && (
+                      <div className="mt-4 space-y-3">
+                        <p className="text-sm text-gray-600">
+                          Champion:{" "}
+                          <span className="font-mono">
+                            {hhBenchData.champion.member_id}
+                          </span>{" "}
+                          (rating{" "}
+                          {hhBenchData.champion.rating != null
+                            ? hhBenchData.champion.rating.toFixed(1)
+                            : "—"}
+                          )
+                        </p>
 
-          {/* Evolution tab */}
-          {tab === "evolution" && (
-            <LeagueEvolution data={evolutionData} />
+                        <h4 className="text-sm font-semibold">
+                          Mean Total Reward
+                        </h4>
+                        <CompetitiveBarChart results={hhBenchData.results} />
+
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-300">
+                              <th className="py-1 pr-3">Policy</th>
+                              <th className="py-1 pr-3">Mean Reward</th>
+                              <th className="py-1 pr-3">Mean Score</th>
+                              <th className="py-1 pr-3">Win Rate</th>
+                              <th className="py-1 pr-3">Mean Length</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {hhBenchData.results.map((r) => (
+                              <tr
+                                key={r.policy}
+                                className="border-b border-gray-200"
+                              >
+                                <td className="py-1 pr-3 font-mono">
+                                  {r.policy}
+                                </td>
+                                <td className="py-1 pr-3">
+                                  {r.mean_total_reward.toFixed(4)}
+                                </td>
+                                <td className="py-1 pr-3">
+                                  {r.mean_final_score.toFixed(2)}
+                                </td>
+                                <td className="py-1 pr-3">
+                                  {(r.win_rate * 100).toFixed(0)}%
+                                </td>
+                                <td className="py-1 pr-3">
+                                  {r.mean_episode_length}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Robustness section */}
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">
+                      Run Robustness on Champion
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-3">
+                      Evaluates the competitive league champion against all baseline
+                      policies across multiple environment variants and saves a
+                      robustness report.
+                    </p>
+
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Config
+                        </label>
+                        <select
+                          value={hhRobConfigId}
+                          onChange={(e) => setHhRobConfigId(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          <option value="default">default</option>
+                          {hhConfigs.map((c) => (
+                            <option key={c.config_id} value={c.config_id}>
+                              {c.config_id} (agents={c.num_agents}, steps=
+                              {c.max_steps})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Seeds
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={hhRobSeeds}
+                          onChange={(e) => setHhRobSeeds(Number(e.target.value))}
+                          className="border rounded px-2 py-1 text-sm w-16"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Episodes/seed
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={hhRobEpisodesPerSeed}
+                          onChange={(e) =>
+                            setHhRobEpisodesPerSeed(Number(e.target.value))
+                          }
+                          className="border rounded px-2 py-1 text-sm w-16"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Limit sweeps (opt.)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="—"
+                          value={hhRobLimitSweeps}
+                          onChange={(e) => setHhRobLimitSweeps(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm w-20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Seed
+                        </label>
+                        <input
+                          type="number"
+                          value={hhRobSeed}
+                          onChange={(e) => setHhRobSeed(Number(e.target.value))}
+                          className="border rounded px-2 py-1 text-sm w-20"
+                        />
+                      </div>
+                      <button
+                        onClick={handleHhRobustness}
+                        disabled={hhRobRunning || hhMembers.length === 0}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm disabled:opacity-50"
+                      >
+                        {hhRobRunning ? "Running..." : "Run Robustness"}
+                      </button>
+                    </div>
+
+                    {hhRobRunning && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        Running robustness sweep &mdash; this may take a moment...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Evolution tab */}
+              {tab === "evolution" && (
+                <div className="flex gap-6">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold mb-2">Lineage Graph</h3>
+                    {hhEvolutionData.members.length === 0 &&
+                    hhEvolutionData.champion_history.length === 0 ? (
+                      <p className="text-gray-500">
+                        No evolution data yet. Train and save snapshots to build
+                        history.
+                      </p>
+                    ) : (
+                      <>
+                        <CompLineageSVG
+                          members={hhEvolutionData.members}
+                          onSelect={setHhSelectedEvolution}
+                          selectedId={hhSelectedEvolution?.member_id ?? null}
+                        />
+
+                        {hhSelectedEvolution && (
+                          <div className="border border-gray-200 rounded p-3 text-sm mt-3">
+                            <h4 className="font-bold mb-2">Details</h4>
+                            <dl className="space-y-1">
+                              <dt className="text-gray-500">Member ID</dt>
+                              <dd className="font-mono text-xs">
+                                {hhSelectedEvolution.member_id}
+                              </dd>
+                              <dt className="text-gray-500">Label</dt>
+                              <dd>
+                                <span
+                                  className="font-medium"
+                                  style={{
+                                    color: compLabelColor(
+                                      hhSelectedEvolution.strategy.label,
+                                    ),
+                                  }}
+                                >
+                                  {hhSelectedEvolution.strategy.label}
+                                </span>
+                              </dd>
+                              <dt className="text-gray-500">Rating</dt>
+                              <dd>{hhSelectedEvolution.rating.toFixed(1)}</dd>
+                              <dt className="text-gray-500">Parent</dt>
+                              <dd className="font-mono text-xs">
+                                {hhSelectedEvolution.parent_id ?? "none"}
+                              </dd>
+                              <dt className="text-gray-500">Cluster</dt>
+                              <dd>
+                                {hhSelectedEvolution.strategy.cluster_id ?? "—"}
+                              </dd>
+                              <dt className="text-gray-500">Robustness</dt>
+                              <dd>
+                                {hhSelectedEvolution.robustness_score != null
+                                  ? hhSelectedEvolution.robustness_score.toFixed(3)
+                                  : "—"}
+                              </dd>
+                              <dt className="text-gray-500">Created</dt>
+                              <dd className="text-xs">
+                                {hhSelectedEvolution.created_at
+                                  ? new Date(
+                                      hhSelectedEvolution.created_at,
+                                    ).toLocaleString()
+                                  : "—"}
+                              </dd>
+                              <dt className="text-gray-500">Notes</dt>
+                              <dd className="text-xs">
+                                {hhSelectedEvolution.notes ?? "—"}
+                              </dd>
+                            </dl>
+                            <button
+                              onClick={() => setHhSelectedEvolution(null)}
+                              className="mt-2 text-xs text-blue-500 hover:underline"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Champion history timeline */}
+                  <div className="w-72 flex-shrink-0">
+                    <h3 className="text-sm font-semibold mb-2">
+                      Champion History
+                    </h3>
+                    {hhEvolutionData.champion_history.length === 0 ? (
+                      <p className="text-gray-500 text-sm">
+                        No champion history yet.
+                      </p>
+                    ) : (
+                      <ol className="space-y-2">
+                        {hhEvolutionData.champion_history.map((entry, idx) => (
+                          <CompetitiveTimelineEntry
+                            key={entry.member_id}
+                            entry={entry}
+                            idx={idx}
+                          />
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
