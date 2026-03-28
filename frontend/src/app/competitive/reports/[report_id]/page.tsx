@@ -38,7 +38,20 @@ export default function CompetitiveReportDetailPage() {
   if (error) return <main className="max-w-5xl mx-auto p-8"><p className="text-red-600">Error: {error}</p></main>;
   if (!data) return <main className="max-w-5xl mx-auto p-8"><p>No data.</p></main>;
 
-  const perSweep = (data.per_sweep_results ?? {}) as Record<string, Record<string, any>>;
+  // Transform per_sweep_results: backend returns `mean_reward` but
+  // RobustHeatmap expects `mean_total_reward`.
+  const rawPerSweep = (data.per_sweep_results ?? {}) as Record<string, Record<string, any>>;
+  const perSweep: Record<string, Record<string, any>> = {};
+  for (const [sweepName, policies] of Object.entries(rawPerSweep)) {
+    const mapped: Record<string, any> = {};
+    for (const [policyName, entry] of Object.entries(policies)) {
+      mapped[policyName] = {
+        ...entry,
+        mean_total_reward: entry.mean_total_reward ?? entry.mean_reward,
+      };
+    }
+    perSweep[sweepName] = mapped;
+  }
   const perPolicy = (data.per_policy_robustness ?? {}) as Record<string, any>;
 
   return (

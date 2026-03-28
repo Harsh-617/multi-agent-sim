@@ -536,7 +536,7 @@ export default function CompetitiveLeaguePage() {
     try {
       const payload: CompetitiveChampionRobustnessRequest = {
         config_id: robConfigId,
-        seeds: robSeeds,
+        seeds: [robSeeds],
         episodes_per_seed: robEpisodesPerSeed,
         seed: robSeed,
         ...(robLimitSweeps !== ""
