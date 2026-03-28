@@ -7,9 +7,25 @@ import {
   WsMessage,
   StepMetric,
   EpisodeSummary,
+  CompetitiveEpisodeSummary,
+  isCompetitiveSummary,
 } from "@/lib/api";
 import MetricsChart from "@/components/MetricsChart";
+import CompetitiveReplayView, {
+  CompetitiveStepMetric,
+} from "@/components/CompetitiveReplayView";
 import Link from "next/link";
+
+/**
+ * Detect whether the replay history belongs to a competitive run by checking
+ * for competitive-specific fields on the first metric record.
+ */
+function isCompetitiveRun(history: StepMetric[]): boolean {
+  if (history.length === 0) return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const first = history[0] as any;
+  return "own_score" in first || "own_rank" in first;
+}
 
 export default function ReplayPage() {
   const { run_id } = useParams<{ run_id: string }>();
@@ -18,7 +34,7 @@ export default function ReplayPage() {
   const [history, setHistory] = useState<StepMetric[]>([]);
   const [done, setDone] = useState(false);
   const [terminationReason, setTerminationReason] = useState<string | null>(null);
-  const [summary, setSummary] = useState<EpisodeSummary | null>(null);
+  const [summary, setSummary] = useState<EpisodeSummary | CompetitiveEpisodeSummary | null>(null);
   const [status, setStatus] = useState<"connecting" | "streaming" | "done">("connecting");
 
   const esRef = useRef<EventSource | null>(null);
@@ -85,8 +101,14 @@ export default function ReplayPage() {
         )}
       </div>
 
-      {/* Chart (same component as live view) */}
-      <MetricsChart history={history} />
+      {/* Chart — choose component based on detected archetype */}
+      {isCompetitiveRun(history) ? (
+        <CompetitiveReplayView
+          history={history as unknown as CompetitiveStepMetric[]}
+        />
+      ) : (
+        <MetricsChart history={history} />
+      )}
 
       {/* Episode summary */}
       {summary && (
@@ -97,8 +119,21 @@ export default function ReplayPage() {
             <dd>{summary.episode_length} steps</dd>
             <dt className="font-medium">Termination</dt>
             <dd>{summary.termination_reason}</dd>
-            <dt className="font-medium">Final Shared Pool</dt>
-            <dd>{summary.final_shared_pool.toFixed(2)}</dd>
+            {summary && isCompetitiveSummary(summary) ? (
+              <>
+                <dt className="font-medium">Winner</dt>
+                <dd>{summary.winner_id ?? "none"}</dd>
+                <dt className="font-medium">Score Spread</dt>
+                <dd>{summary.score_spread.toFixed(2)}</dd>
+                <dt className="font-medium">Eliminations</dt>
+                <dd>{summary.num_eliminations}</dd>
+              </>
+            ) : (
+              <>
+                <dt className="font-medium">Final Shared Pool</dt>
+                <dd>{(summary as EpisodeSummary).final_shared_pool.toFixed(2)}</dd>
+              </>
+            )}
           </dl>
           <h3 className="text-sm font-semibold mt-3 mb-1">Total Reward per Agent</h3>
           <ul className="text-sm space-y-1">
