@@ -48,6 +48,24 @@ export interface EpisodeSummary {
   total_reward_per_agent: Record<string, number>;
 }
 
+export interface CompetitiveEpisodeSummary {
+  episode_length: number;
+  termination_reason: string;
+  winner_id: string | null;
+  final_rankings: string[];
+  final_scores: Record<string, number>;
+  score_spread: number;
+  num_eliminations: number;
+  total_reward_per_agent: Record<string, number>;
+}
+
+/** Type guard: returns true when the summary looks like a competitive episode. */
+export function isCompetitiveSummary(
+  s: EpisodeSummary | CompetitiveEpisodeSummary,
+): s is CompetitiveEpisodeSummary {
+  return "winner_id" in s || "final_scores" in s;
+}
+
 export interface WsStepMessage {
   type: "step";
   run_id: string;
@@ -171,7 +189,7 @@ export interface RunListItem {
 }
 
 export interface RunDetail extends RunListItem {
-  episode_summary: EpisodeSummary | null;
+  episode_summary: EpisodeSummary | CompetitiveEpisodeSummary | null;
 }
 
 export function listRuns(): Promise<RunListItem[]> {

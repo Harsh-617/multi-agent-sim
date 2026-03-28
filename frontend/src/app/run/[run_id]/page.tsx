@@ -4,12 +4,17 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   connectMetrics,
+  getRunDetail,
   WsMessage,
   StepMetric,
   EpisodeSummary,
+  CompetitiveEpisodeSummary,
+  isCompetitiveSummary,
   StepEvent,
+  RunDetail,
 } from "@/lib/api";
 import MetricsChart from "@/components/MetricsChart";
+import CompetitiveRunSummary from "@/components/CompetitiveRunSummary";
 import StopRunButton from "@/components/StopRunButton";
 import Link from "next/link";
 
@@ -23,6 +28,7 @@ export default function RunPage() {
   const [terminationReason, setTerminationReason] = useState<string | null>(null);
   const [summary, setSummary] = useState<EpisodeSummary | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("connecting");
+  const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
@@ -52,6 +58,22 @@ export default function RunPage() {
     }
   }, []);
 
+  /** Fetch run detail from REST API (fallback when WS misses the run). */
+  const fetchRunDetail = useCallback(async () => {
+    if (!run_id || doneRef.current) return;
+    try {
+      const detail = await getRunDetail(run_id);
+      setRunDetail(detail);
+      if (detail.episode_summary) {
+        doneRef.current = true;
+        setDone(true);
+        setTerminationReason(detail.termination_reason ?? detail.episode_summary.termination_reason);
+      }
+    } catch {
+      // Run may not exist yet — ignore
+    }
+  }, [run_id]);
+
   useEffect(() => {
     if (!run_id) return;
 
@@ -64,13 +86,20 @@ export default function RunPage() {
           setWsStatus("open");
           handleMessage(msg);
         },
-        () => setWsStatus("closed"),
+        () => {
+          setWsStatus("closed");
+          // WS closed cleanly — fetch detail in case run already finished
+          fetchRunDetail();
+        },
         () => {
           setWsStatus("closed");
           // Exponential backoff, max 5 attempts; stop if run completed normally.
           if (!doneRef.current && retryRef.current < 5) {
             retryRef.current++;
             setTimeout(connect, 1000 * Math.pow(2, retryRef.current - 1));
+          } else {
+            // Retries exhausted — try REST fallback
+            fetchRunDetail();
           }
         }
       );
@@ -82,7 +111,14 @@ export default function RunPage() {
     return () => {
       wsRef.current?.close();
     };
-  }, [run_id, handleMessage]);
+  }, [run_id, handleMessage, fetchRunDetail]);
+
+  // Resolve the episode summary — prefer WS-delivered, fall back to REST detail
+  const rawSummary = summary ?? (runDetail?.episode_summary as EpisodeSummary | CompetitiveEpisodeSummary | null);
+  const competitiveSummary =
+    rawSummary && isCompetitiveSummary(rawSummary) ? rawSummary : null;
+  const mixedSummary =
+    rawSummary && !isCompetitiveSummary(rawSummary) ? (rawSummary as EpisodeSummary) : null;
 
   return (
     <main className="max-w-4xl mx-auto p-8">
@@ -141,28 +177,30 @@ export default function RunPage() {
         </div>
       )}
 
-      {/* Episode summary */}
-      {summary && (
+      {/* Episode summary — competitive or mixed */}
+      {competitiveSummary ? (
+        <CompetitiveRunSummary summary={competitiveSummary} />
+      ) : mixedSummary ? (
         <div className="mt-6 p-4 border border-gray-300 rounded">
           <h2 className="text-lg font-semibold mb-2">Episode Summary</h2>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="font-medium">Length</dt>
-            <dd>{summary.episode_length} steps</dd>
+            <dd>{mixedSummary.episode_length} steps</dd>
             <dt className="font-medium">Termination</dt>
-            <dd>{summary.termination_reason}</dd>
+            <dd>{mixedSummary.termination_reason}</dd>
             <dt className="font-medium">Final Shared Pool</dt>
-            <dd>{summary.final_shared_pool.toFixed(2)}</dd>
+            <dd>{mixedSummary.final_shared_pool.toFixed(2)}</dd>
           </dl>
           <h3 className="text-sm font-semibold mt-3 mb-1">Total Reward per Agent</h3>
           <ul className="text-sm space-y-1">
-            {Object.entries(summary.total_reward_per_agent).map(([agentId, reward]) => (
+            {Object.entries(mixedSummary.total_reward_per_agent).map(([agentId, reward]) => (
               <li key={agentId} className="font-mono">
                 {agentId.slice(0, 8)}: {reward.toFixed(3)}
               </li>
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
     </main>
   );
 }
