@@ -497,3 +497,19 @@
 - All redirects fire correctly
 - All back links point to correct URLs
 - Nav active states correct for all routes
+
+
+## Frontend UI Fixes (post-redesign)
+
+11 issues found and fixed across 7 files:
+1. Home page typography hierarchy corrected (headline 42px/600)
+2. Recent runs panel independently scrollable (max-height + overflow-y)
+3. Advanced parameters in 2-column grid layout
+4. Recent runs filtering fixed — each template shows its own runs only
+5. Back links corrected on run and replay pages
+6. Report detail page dark theme applied throughout
+7. Competitive reports correctly tagged as "Robustness" not "Other"
+8. Sort dropdown wired up on Research page
+9. Recompute Ratings shows success/error feedback with auto-clear
+10. League lineage/evolution detail panel repositioned as overlay
+11. Evolution tab detail panel dark theme fixed
