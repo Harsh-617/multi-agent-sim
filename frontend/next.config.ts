@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/replay/:path*",
-        destination: "/simulate/resource-sharing/replay/:path*",
+        destination: "/league",
         permanent: false,
       },
       {

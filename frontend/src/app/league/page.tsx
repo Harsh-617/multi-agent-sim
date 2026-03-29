@@ -626,7 +626,7 @@ export default function LeaguePage() {
           : {}),
       };
       const resp = await runCompetitiveChampionRobustness(payload);
-      router.push(`/competitive/reports/${resp.report_id}`);
+      router.push(`/research/${encodeURIComponent(resp.report_id)}`);
     } catch (e) {
       setHhError(String(e));
       setHhRobRunning(false);
