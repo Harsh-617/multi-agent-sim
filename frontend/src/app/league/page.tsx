@@ -466,6 +466,9 @@ export default function LeaguePage() {
   const [hhRobSeed, setHhRobSeed] = useState(42);
   const [hhRobRunning, setHhRobRunning] = useState(false);
 
+  // Recompute feedback state
+  const [recomputeStatus, setRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+
   // Competitive lineage/evolution selection
   const [hhSelectedEvolution, setHhSelectedEvolution] =
     useState<CompetitiveEvolutionMember | null>(null);
@@ -528,13 +531,17 @@ export default function LeaguePage() {
   async function handleRsRecompute() {
     setRsRecomputing(true);
     setRsError(null);
+    setRecomputeStatus("running");
     try {
       const r = await recomputeLeagueRatings();
       setRsRatings(new Map(r.map((x) => [x.member_id, x.rating])));
       const lin = await getLeagueLineage();
       setRsLineageMembers(lin.members);
+      setRecomputeStatus("success");
+      setTimeout(() => setRecomputeStatus("idle"), 3000);
     } catch (e) {
       setRsError(String(e));
+      setRecomputeStatus("error");
     } finally {
       setRsRecomputing(false);
     }
@@ -560,13 +567,17 @@ export default function LeaguePage() {
   async function handleHhRecompute() {
     setHhRecomputing(true);
     setHhError(null);
+    setRecomputeStatus("running");
     try {
       const r = await recomputeCompetitiveLeagueRatings();
       setHhRatings(new Map(r.map((x) => [x.member_id, x.rating])));
       const evo = await getCompetitiveLeagueEvolution();
       setHhEvolutionData(evo);
+      setRecomputeStatus("success");
+      setTimeout(() => setRecomputeStatus("idle"), 3000);
     } catch (e) {
       setHhError(String(e));
+      setRecomputeStatus("error");
     } finally {
       setHhRecomputing(false);
     }
@@ -765,13 +776,34 @@ export default function LeaguePage() {
         </button>
 
         {/* Recompute Ratings button */}
-        <button
-          onClick={isRS ? handleRsRecompute : handleHhRecompute}
-          disabled={recomputing || members.length === 0}
-          className="ml-auto px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50"
-        >
-          {recomputing ? "Recomputing..." : "Recompute Ratings"}
-        </button>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={isRS ? handleRsRecompute : handleHhRecompute}
+            disabled={recomputing || members.length === 0}
+            style={{
+              padding: "6px 12px",
+              background: recomputing ? "var(--bg-elevated)" : "var(--accent)",
+              color: recomputing ? "var(--text-tertiary)" : "#fff",
+              borderRadius: 6,
+              border: "none",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: recomputing || members.length === 0 ? "default" : "pointer",
+              opacity: recomputing || members.length === 0 ? 0.5 : 1,
+            }}
+          >
+            {recomputing ? "Recomputing..." : "Recompute Ratings"}
+          </button>
+          {recomputeStatus === "running" && (
+            <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Recomputing...</span>
+          )}
+          {recomputeStatus === "success" && (
+            <span style={{ fontSize: 12, color: "var(--accent)" }}>&#10003; Ratings updated</span>
+          )}
+          {recomputeStatus === "error" && (
+            <span style={{ fontSize: 12, color: "#f87171" }}>Failed to recompute</span>
+          )}
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -956,9 +988,9 @@ export default function LeaguePage() {
 
               {/* Lineage tab */}
               {tab === "lineage" && (
-                <div className="flex gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold mb-2">Lineage Graph</h3>
+                <div>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Lineage Graph</h3>
+                  <div style={{ position: "relative" }}>
                     <CompLineageSVG
                       members={hhEvolutionData.members}
                       onSelect={setHhSelectedEvolution}
@@ -966,18 +998,30 @@ export default function LeaguePage() {
                     />
 
                     {hhSelectedEvolution && (
-                      <div className="border border-gray-200 rounded p-3 text-sm mt-3">
-                        <h4 className="font-bold mb-2">Details</h4>
-                        <dl className="space-y-1">
-                          <dt className="text-gray-500">Member ID</dt>
-                          <dd className="font-mono text-xs">
+                      <div style={{
+                        position: "absolute",
+                        top: 12,
+                        right: 12,
+                        width: 220,
+                        background: "var(--bg-elevated)",
+                        border: "1px solid var(--bg-border)",
+                        borderRadius: 8,
+                        padding: 16,
+                        zIndex: 10,
+                        fontSize: 13,
+                        color: "var(--text-primary)",
+                      }}>
+                        <h4 style={{ fontWeight: 700, marginBottom: 8 }}>Details</h4>
+                        <dl style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Member ID</dt>
+                          <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
                             {hhSelectedEvolution.member_id}
                           </dd>
-                          <dt className="text-gray-500">Label</dt>
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Label</dt>
                           <dd>
                             <span
-                              className="font-medium"
                               style={{
+                                fontWeight: 500,
                                 color: compLabelColor(
                                   hhSelectedEvolution.strategy.label,
                                 ),
@@ -986,24 +1030,24 @@ export default function LeaguePage() {
                               {hhSelectedEvolution.strategy.label}
                             </span>
                           </dd>
-                          <dt className="text-gray-500">Rating</dt>
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Rating</dt>
                           <dd>{hhSelectedEvolution.rating.toFixed(1)}</dd>
-                          <dt className="text-gray-500">Parent</dt>
-                          <dd className="font-mono text-xs">
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Parent</dt>
+                          <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
                             {hhSelectedEvolution.parent_id ?? "none"}
                           </dd>
-                          <dt className="text-gray-500">Cluster</dt>
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Cluster</dt>
                           <dd>
                             {hhSelectedEvolution.strategy.cluster_id ?? "—"}
                           </dd>
-                          <dt className="text-gray-500">Robustness</dt>
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Robustness</dt>
                           <dd>
                             {hhSelectedEvolution.robustness_score != null
                               ? hhSelectedEvolution.robustness_score.toFixed(3)
                               : "—"}
                           </dd>
-                          <dt className="text-gray-500">Created</dt>
-                          <dd className="text-xs">
+                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Created</dt>
+                          <dd style={{ fontSize: 11 }}>
                             {hhSelectedEvolution.created_at
                               ? new Date(
                                   hhSelectedEvolution.created_at,
@@ -1013,7 +1057,7 @@ export default function LeaguePage() {
                         </dl>
                         <button
                           onClick={() => setHhSelectedEvolution(null)}
-                          className="mt-2 text-xs text-blue-500 hover:underline"
+                          style={{ marginTop: 8, fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                         >
                           Close
                         </button>
@@ -1262,17 +1306,17 @@ export default function LeaguePage() {
 
               {/* Evolution tab */}
               {tab === "evolution" && (
-                <div className="flex gap-6">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold mb-2">Lineage Graph</h3>
+                <div style={{ display: "flex", gap: 24 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Lineage Graph</h3>
                     {hhEvolutionData.members.length === 0 &&
                     hhEvolutionData.champion_history.length === 0 ? (
-                      <p className="text-gray-500">
+                      <p style={{ color: "var(--text-tertiary)" }}>
                         No evolution data yet. Train and save snapshots to build
                         history.
                       </p>
                     ) : (
-                      <>
+                      <div style={{ position: "relative" }}>
                         <CompLineageSVG
                           members={hhEvolutionData.members}
                           onSelect={setHhSelectedEvolution}
@@ -1280,18 +1324,30 @@ export default function LeaguePage() {
                         />
 
                         {hhSelectedEvolution && (
-                          <div className="border border-gray-200 rounded p-3 text-sm mt-3">
-                            <h4 className="font-bold mb-2">Details</h4>
-                            <dl className="space-y-1">
-                              <dt className="text-gray-500">Member ID</dt>
-                              <dd className="font-mono text-xs">
+                          <div style={{
+                            position: "absolute",
+                            top: 12,
+                            right: 12,
+                            width: 220,
+                            background: "var(--bg-elevated)",
+                            border: "1px solid var(--bg-border)",
+                            borderRadius: 8,
+                            padding: 16,
+                            zIndex: 10,
+                            fontSize: 13,
+                            color: "var(--text-primary)",
+                          }}>
+                            <h4 style={{ fontWeight: 700, marginBottom: 8 }}>Details</h4>
+                            <dl style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Member ID</dt>
+                              <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
                                 {hhSelectedEvolution.member_id}
                               </dd>
-                              <dt className="text-gray-500">Label</dt>
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Label</dt>
                               <dd>
                                 <span
-                                  className="font-medium"
                                   style={{
+                                    fontWeight: 500,
                                     color: compLabelColor(
                                       hhSelectedEvolution.strategy.label,
                                     ),
@@ -1300,49 +1356,49 @@ export default function LeaguePage() {
                                   {hhSelectedEvolution.strategy.label}
                                 </span>
                               </dd>
-                              <dt className="text-gray-500">Rating</dt>
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Rating</dt>
                               <dd>{hhSelectedEvolution.rating.toFixed(1)}</dd>
-                              <dt className="text-gray-500">Parent</dt>
-                              <dd className="font-mono text-xs">
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Parent</dt>
+                              <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
                                 {hhSelectedEvolution.parent_id ?? "none"}
                               </dd>
-                              <dt className="text-gray-500">Cluster</dt>
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Cluster</dt>
                               <dd>
                                 {hhSelectedEvolution.strategy.cluster_id ?? "—"}
                               </dd>
-                              <dt className="text-gray-500">Robustness</dt>
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Robustness</dt>
                               <dd>
                                 {hhSelectedEvolution.robustness_score != null
                                   ? hhSelectedEvolution.robustness_score.toFixed(3)
                                   : "—"}
                               </dd>
-                              <dt className="text-gray-500">Created</dt>
-                              <dd className="text-xs">
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Created</dt>
+                              <dd style={{ fontSize: 11 }}>
                                 {hhSelectedEvolution.created_at
                                   ? new Date(
                                       hhSelectedEvolution.created_at,
                                     ).toLocaleString()
                                   : "—"}
                               </dd>
-                              <dt className="text-gray-500">Notes</dt>
-                              <dd className="text-xs">
+                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Notes</dt>
+                              <dd style={{ fontSize: 11 }}>
                                 {hhSelectedEvolution.notes ?? "—"}
                               </dd>
                             </dl>
                             <button
                               onClick={() => setHhSelectedEvolution(null)}
-                              className="mt-2 text-xs text-blue-500 hover:underline"
+                              style={{ marginTop: 8, fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                             >
                               Close
                             </button>
                           </div>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
 
                   {/* Champion history timeline */}
-                  <div className="w-72 flex-shrink-0">
+                  <div style={{ width: 288, flexShrink: 0 }}>
                     <h3 className="text-sm font-semibold mb-2">
                       Champion History
                     </h3>

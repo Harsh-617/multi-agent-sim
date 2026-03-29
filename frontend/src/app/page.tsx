@@ -204,10 +204,10 @@ export default function HomePage() {
           {/* Headline */}
           <h1
             style={{
-              fontSize: 36,
-              fontWeight: 500,
+              fontSize: 42,
+              fontWeight: 600,
               color: "var(--text-primary)",
-              lineHeight: 1.2,
+              lineHeight: 1.15,
               marginBottom: 16,
               marginTop: 0,
             }}

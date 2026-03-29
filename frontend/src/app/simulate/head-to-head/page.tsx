@@ -285,6 +285,7 @@ function HeadToHeadInner() {
                   Advanced parameters
                 </p>
 
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
                 {/* Population */}
                 <div>
                   <label style={labelStyle}>initial_score</label>
@@ -515,6 +516,7 @@ function HeadToHeadInner() {
                     style={inputStyle}
                   />
                 </div>
+                </div>
               </>
             )}
           </div>
@@ -567,6 +569,7 @@ function HeadToHeadInner() {
             Recent runs
           </p>
 
+          <div style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "var(--bg-elevated) transparent" }}>
           {runsLoading && (
             <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>
               Loading...
@@ -654,6 +657,7 @@ function HeadToHeadInner() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
       </div>
     </main>

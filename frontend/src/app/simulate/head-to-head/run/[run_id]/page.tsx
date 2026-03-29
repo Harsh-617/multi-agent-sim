@@ -125,7 +125,7 @@ export default function RunPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <Link href="/simulate/head-to-head" className="text-blue-500 hover:underline text-sm">
-            &larr; Back
+            &larr; Head-to-Head
           </Link>
           <h1 className="text-2xl font-bold">
             Run <span className="font-mono">{run_id}</span>

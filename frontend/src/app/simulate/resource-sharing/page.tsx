@@ -332,6 +332,7 @@ function ResourceSharingInner() {
                   Advanced parameters
                 </p>
 
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
                 {/* Population */}
                 <div>
                   <label style={labelStyle}>initial_shared_pool</label>
@@ -497,6 +498,7 @@ function ResourceSharingInner() {
                     style={inputStyle}
                   />
                 </div>
+                </div>
               </>
             )}
           </div>
@@ -551,6 +553,7 @@ function ResourceSharingInner() {
             Recent runs
           </p>
 
+          <div style={{ maxHeight: "calc(100vh - 220px)", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "var(--bg-elevated) transparent" }}>
           {runsLoading && (
             <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>
               Loading...
@@ -638,6 +641,7 @@ function ResourceSharingInner() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
       </div>
     </main>

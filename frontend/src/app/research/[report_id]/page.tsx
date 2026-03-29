@@ -60,9 +60,9 @@ export default function ResearchReportDetailPage() {
     }
   }, [reportId, isCompetitive]);
 
-  if (loading) return <main className="max-w-5xl mx-auto p-8"><p>Loading...</p></main>;
-  if (error) return <main className="max-w-5xl mx-auto p-8"><p className="text-red-600">Error: {error}</p></main>;
-  if (!data) return <main className="max-w-5xl mx-auto p-8"><p>No data.</p></main>;
+  if (loading) return <main style={{ maxWidth: 1024, margin: "0 auto", padding: 32, background: "var(--bg-base)", color: "var(--text-primary)" }}><p>Loading...</p></main>;
+  if (error) return <main style={{ maxWidth: 1024, margin: "0 auto", padding: 32, background: "var(--bg-base)" }}><p style={{ color: "#f87171" }}>Error: {error}</p></main>;
+  if (!data) return <main style={{ maxWidth: 1024, margin: "0 auto", padding: 32, background: "var(--bg-base)", color: "var(--text-primary)" }}><p>No data.</p></main>;
 
   if (isCompetitive) {
     return <CompetitiveReportView data={data} strategies={strategies} />;
@@ -74,31 +74,84 @@ export default function ResearchReportDetailPage() {
 /* Mixed report detail (copied from reports/[report_id]/page.tsx)      */
 /* ------------------------------------------------------------------ */
 
+function BackToReportsLink() {
+  const [hover, setHover] = useState(false);
+  return (
+    <Link
+      href="/research"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        color: hover ? "var(--text-primary)" : "var(--text-secondary)",
+        fontSize: 13,
+        textDecoration: "none",
+      }}
+    >
+      &larr; Back to Reports
+    </Link>
+  );
+}
+
+const sectionHeadingStyle: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 500,
+  color: "var(--text-primary)",
+  marginBottom: 12,
+};
+
+const reportTableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  background: "var(--bg-surface)",
+  border: "1px solid var(--bg-border)",
+  borderRadius: 8,
+};
+
+const reportThStyle: React.CSSProperties = {
+  background: "var(--bg-elevated)",
+  color: "var(--text-secondary)",
+  fontSize: 11,
+  textTransform: "uppercase",
+  padding: "8px 12px",
+  textAlign: "left",
+  fontWeight: 500,
+};
+
+const reportTdStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderBottom: "1px solid var(--bg-border)",
+  color: "var(--text-primary)",
+  fontSize: 13,
+};
+
 function MixedReportView({ data, strategies }: { data: Record<string, any>; strategies: StrategyResponse | null }) {
   const kind = data.kind as string;
 
   return (
-    <main className="max-w-5xl mx-auto p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold font-mono">{data.report_id as string}</h1>
-        <Link
-          href="/research"
-          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
-        >
-          Back to Reports
-        </Link>
+    <main style={{ maxWidth: 1024, margin: "0 auto", padding: 32, background: "var(--bg-base)" }}>
+      <div style={{ marginBottom: 16 }}>
+        <BackToReportsLink />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-primary)", margin: 0 }}>{data.report_id as string}</h1>
       </div>
 
-      <div className="text-sm text-gray-600 mb-6 space-y-1">
-        <p>
-          <span className={`px-2 py-0.5 rounded text-xs font-medium mr-2 ${
-            kind === "robust" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
-          }`}>
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--bg-border)", borderRadius: 8, padding: 20, marginBottom: 24 }}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 4px" }}>
+          <span style={{
+            padding: "2px 8px",
+            borderRadius: 4,
+            fontSize: 11,
+            fontWeight: 500,
+            marginRight: 8,
+            background: kind === "robust" ? "rgba(168,85,247,0.15)" : "rgba(59,130,246,0.15)",
+            color: kind === "robust" ? "#c084fc" : "#60a5fa",
+          }}>
             {kind}
           </span>
-          Config hash: <code>{data.config_hash as string}</code>
+          Config hash: <code style={{ color: "var(--text-primary)" }}>{data.config_hash as string}</code>
         </p>
-        <p>Generated: {data.timestamp as string}</p>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>Generated: {data.timestamp as string}</p>
       </div>
 
       {kind === "robust" ? (
@@ -117,19 +170,19 @@ function RobustReportView({ data }: { data: Record<string, any> }) {
   const perPolicy = (data.per_policy_robustness ?? {}) as Record<string, any>;
 
   return (
-    <div className="space-y-8">
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <section>
-        <h2 className="text-lg font-semibold mb-3">Reward Heatmap (Policy x Sweep)</h2>
+        <h2 style={sectionHeadingStyle}>Reward Heatmap (Policy x Sweep)</h2>
         <RobustHeatmap perSweepResults={perSweep} />
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Mean vs Worst-Case Reward</h2>
+        <h2 style={sectionHeadingStyle}>Mean vs Worst-Case Reward</h2>
         <RobustScatter perPolicyRobustness={perPolicy} />
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Robustness Summary</h2>
+        <h2 style={sectionHeadingStyle}>Robustness Summary</h2>
         <RobustSummaryTable
           perPolicyRobustness={perPolicy}
           perSweepResults={perSweep}
@@ -161,18 +214,18 @@ function MixedStrategyGroupsSection({ strategies }: { strategies: StrategyRespon
   const hasRobustness = policies.some((p) => features[p]?.robustness_score != null);
 
   return (
-    <div className="mt-10 space-y-6">
-      <h2 className="text-lg font-semibold">Strategy Groups</h2>
+    <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 24 }}>
+      <h2 style={sectionHeadingStyle}>Strategy Groups</h2>
 
       {/* Cluster cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(3, 1fr)" }}>
         {clusterIds.map((cid) => (
-          <div key={cid} className="border rounded-lg p-4 bg-white shadow-sm">
-            <h3 className="font-semibold text-sm mb-1">
+          <div key={cid} style={{ background: "var(--bg-surface)", border: "1px solid var(--bg-border)", borderRadius: 8, padding: 16 }}>
+            <h3 style={{ fontWeight: 600, fontSize: 13, marginBottom: 4, color: "var(--text-primary)" }}>
               Cluster {cid}: {labels[String(cid)] ?? `Group ${cid}`}
             </h3>
-            <p className="text-xs text-gray-600 mb-2">{summaries[String(cid)] ?? ""}</p>
-            <ul className="text-xs text-gray-800 list-disc list-inside">
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>{summaries[String(cid)] ?? ""}</p>
+            <ul style={{ fontSize: 12, color: "var(--text-primary)", listStyle: "disc", paddingLeft: 16 }}>
               {byCluster[cid].map((p) => (
                 <li key={p}>{p}</li>
               ))}
@@ -182,18 +235,18 @@ function MixedStrategyGroupsSection({ strategies }: { strategies: StrategyRespon
       </div>
 
       {/* Full policy table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+      <div style={{ overflowX: "auto" }}>
+        <table style={reportTableStyle}>
           <thead>
-            <tr className="border-b text-left">
-              <th className="py-2 pr-3">Policy</th>
-              <th className="py-2 pr-3">Cluster</th>
-              <th className="py-2 pr-3">Label</th>
-              <th className="py-2 pr-3">Mean Return</th>
-              <th className="py-2 pr-3">Collapse Rate</th>
-              <th className="py-2 pr-3">Mean Final Pool</th>
-              {hasWorstCase && <th className="py-2 pr-3">Worst-Case Return</th>}
-              {hasRobustness && <th className="py-2 pr-3">Robustness Score</th>}
+            <tr>
+              <th style={reportThStyle}>Policy</th>
+              <th style={reportThStyle}>Cluster</th>
+              <th style={reportThStyle}>Label</th>
+              <th style={reportThStyle}>Mean Return</th>
+              <th style={reportThStyle}>Collapse Rate</th>
+              <th style={reportThStyle}>Mean Final Pool</th>
+              {hasWorstCase && <th style={reportThStyle}>Worst-Case Return</th>}
+              {hasRobustness && <th style={reportThStyle}>Robustness Score</th>}
             </tr>
           </thead>
           <tbody>
@@ -201,15 +254,15 @@ function MixedStrategyGroupsSection({ strategies }: { strategies: StrategyRespon
               const f = features[p] ?? {};
               const cid = clusters[p];
               return (
-                <tr key={p} className="border-b hover:bg-gray-50">
-                  <td className="py-2 pr-3 font-medium">{p}</td>
-                  <td className="py-2 pr-3 font-mono">{cid}</td>
-                  <td className="py-2 pr-3">{labels[String(cid)] ?? "—"}</td>
-                  <td className="py-2 pr-3 font-mono">{fmt(f.mean_return)}</td>
-                  <td className="py-2 pr-3 font-mono">{fmt(f.collapse_rate, true)}</td>
-                  <td className="py-2 pr-3 font-mono">{fmt(f.mean_final_pool)}</td>
-                  {hasWorstCase && <td className="py-2 pr-3 font-mono">{fmt(f.worst_case_return)}</td>}
-                  {hasRobustness && <td className="py-2 pr-3 font-mono">{fmt(f.robustness_score)}</td>}
+                <tr key={p}>
+                  <td style={{ ...reportTdStyle, fontWeight: 500 }}>{p}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{cid}</td>
+                  <td style={reportTdStyle}>{labels[String(cid)] ?? "—"}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{fmt(f.mean_return)}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{fmt(f.collapse_rate, true)}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{fmt(f.mean_final_pool)}</td>
+                  {hasWorstCase && <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{fmt(f.worst_case_return)}</td>}
+                  {hasRobustness && <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{fmt(f.robustness_score)}</td>}
                 </tr>
               );
             })}
@@ -232,50 +285,50 @@ function EvalReportView({ data }: { data: Record<string, any> }) {
 
   return (
     <div>
-      <table className="w-full text-sm border-collapse mb-6">
+      <table style={{ ...reportTableStyle, marginBottom: 24 }}>
         <thead>
-          <tr className="border-b text-left">
-            <th className="py-2 pr-3">#</th>
-            <th className="py-2 pr-3">Policy</th>
-            <th className="py-2 pr-3">Source</th>
-            <th className="py-2 pr-3">Mean Reward</th>
-            <th className="py-2 pr-3">Std</th>
-            <th className="py-2 pr-3">Final Pool</th>
-            <th className="py-2 pr-3">Collapse %</th>
-            <th className="py-2">Episodes</th>
+          <tr>
+            <th style={reportThStyle}>#</th>
+            <th style={reportThStyle}>Policy</th>
+            <th style={reportThStyle}>Source</th>
+            <th style={reportThStyle}>Mean Reward</th>
+            <th style={reportThStyle}>Std</th>
+            <th style={reportThStyle}>Final Pool</th>
+            <th style={reportThStyle}>Collapse %</th>
+            <th style={reportThStyle}>Episodes</th>
           </tr>
         </thead>
         <tbody>
           {ranked.map((r, i) => (
-            <tr key={r.policy_name} className="border-b hover:bg-gray-50">
-              <td className="py-2 pr-3 text-gray-500">{i + 1}</td>
-              <td className="py-2 pr-3 font-medium">{r.policy_name}</td>
-              <td className="py-2 pr-3 text-gray-600">{r.source ?? "—"}</td>
-              <td className="py-2 pr-3 font-mono">
+            <tr key={r.policy_name}>
+              <td style={{ ...reportTdStyle, color: "var(--text-secondary)" }}>{i + 1}</td>
+              <td style={{ ...reportTdStyle, fontWeight: 500 }}>{r.policy_name}</td>
+              <td style={{ ...reportTdStyle, color: "var(--text-secondary)" }}>{r.source ?? "—"}</td>
+              <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>
                 {(r.mean_total_reward ?? 0).toFixed(4)}
               </td>
-              <td className="py-2 pr-3 font-mono">
+              <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>
                 {(r.std_total_reward ?? 0).toFixed(4)}
               </td>
-              <td className="py-2 pr-3 font-mono">
+              <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>
                 {(r.mean_final_shared_pool ?? 0).toFixed(2)}
               </td>
-              <td className="py-2 pr-3 font-mono">
+              <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>
                 {((r.collapse_rate ?? 0) * 100).toFixed(1)}%
               </td>
-              <td className="py-2 font-mono">{r.n_episodes ?? 0}</td>
+              <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{r.n_episodes ?? 0}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
       {skipped.length > 0 && (
-        <div className="mt-4">
-          <h3 className="font-semibold mb-2">Skipped Policies</h3>
-          <ul className="text-sm text-gray-600 list-disc list-inside">
+        <div style={{ marginTop: 16 }}>
+          <h3 style={{ ...sectionHeadingStyle, fontSize: 13 }}>Skipped Policies</h3>
+          <ul style={{ fontSize: 13, color: "var(--text-secondary)", listStyle: "disc", paddingLeft: 16 }}>
             {skipped.map((s: any) => (
               <li key={s.policy_name}>
-                <strong>{s.policy_name}</strong> ({s.source}): {s.skip_reason ?? "unavailable"}
+                <strong style={{ color: "var(--text-primary)" }}>{s.policy_name}</strong> ({s.source}): {s.skip_reason ?? "unavailable"}
               </li>
             ))}
           </ul>
@@ -307,43 +360,48 @@ function CompetitiveReportView({ data, strategies }: { data: Record<string, any>
   const perPolicy = (data.per_policy_robustness ?? {}) as Record<string, any>;
 
   return (
-    <main className="max-w-5xl mx-auto p-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold font-mono">{data.report_id as string}</h1>
-        <Link
-          href="/research"
-          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
-        >
-          Back to Reports
-        </Link>
+    <main style={{ maxWidth: 1024, margin: "0 auto", padding: 32, background: "var(--bg-base)" }}>
+      <div style={{ marginBottom: 16 }}>
+        <BackToReportsLink />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-primary)", margin: 0 }}>{data.report_id as string}</h1>
       </div>
 
-      <div className="text-sm text-gray-600 mb-6 space-y-1">
-        <p>
-          <span className="px-2 py-0.5 rounded text-xs font-medium mr-2 bg-orange-100 text-orange-800">
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--bg-border)", borderRadius: 8, padding: 20, marginBottom: 24 }}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 4px" }}>
+          <span style={{
+            padding: "2px 8px",
+            borderRadius: 4,
+            fontSize: 11,
+            fontWeight: 500,
+            marginRight: 8,
+            background: "rgba(249,115,22,0.15)",
+            color: "#fb923c",
+          }}>
             competitive
           </span>
-          Config hash: <code>{data.config_hash as string}</code>
+          Config hash: <code style={{ color: "var(--text-primary)" }}>{data.config_hash as string}</code>
         </p>
-        <p>Generated: {data.timestamp as string}</p>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>Generated: {data.timestamp as string}</p>
       </div>
 
-      <div className="space-y-8">
+      <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
         {/* Section 1 — Summary table */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Robustness Summary</h2>
+          <h2 style={sectionHeadingStyle}>Robustness Summary</h2>
           <CompetitiveSummaryTable perPolicy={perPolicy} />
         </section>
 
         {/* Section 2 — Heatmap */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Reward Heatmap (Policy x Sweep)</h2>
+          <h2 style={sectionHeadingStyle}>Reward Heatmap (Policy x Sweep)</h2>
           <RobustHeatmap perSweepResults={perSweep} />
         </section>
 
         {/* Section 3 — Scatter plot */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Mean vs Worst-Case Reward</h2>
+          <h2 style={sectionHeadingStyle}>Mean vs Worst-Case Reward</h2>
           <RobustScatter perPolicyRobustness={perPolicy} />
         </section>
       </div>
@@ -363,7 +421,7 @@ function CompetitiveSummaryTable({ perPolicy }: { perPolicy: Record<string, any>
     (p: any) => p.n_sweeps_evaluated > 0
   ) as any[];
 
-  if (entries.length === 0) return <p className="text-gray-500">No policy data.</p>;
+  if (entries.length === 0) return <p style={{ color: "var(--text-tertiary)" }}>No policy data.</p>;
 
   // Find best per column
   const bestMean = Math.max(...entries.map((p) => p.overall_mean_reward ?? -Infinity));
@@ -375,38 +433,44 @@ function CompetitiveSummaryTable({ perPolicy }: { perPolicy: Record<string, any>
     (a, b) => (b.robustness_score ?? 0) - (a.robustness_score ?? 0)
   );
 
+  const bestStyle = (isBest: boolean): React.CSSProperties => ({
+    ...reportTdStyle,
+    fontFamily: "var(--font-mono)",
+    ...(isBest ? { color: "#4ade80", fontWeight: 700 } : {}),
+  });
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
+    <div style={{ overflowX: "auto" }}>
+      <table style={reportTableStyle}>
         <thead>
-          <tr className="border-b text-left">
-            <th className="py-2 pr-3">#</th>
-            <th className="py-2 pr-3">Policy</th>
-            <th className="py-2 pr-3">Mean Reward</th>
-            <th className="py-2 pr-3">Robustness</th>
-            <th className="py-2 pr-3">Winner Rate</th>
-            <th className="py-2 pr-3">Worst-Case</th>
-            <th className="py-2">Sweeps</th>
+          <tr>
+            <th style={reportThStyle}>#</th>
+            <th style={reportThStyle}>Policy</th>
+            <th style={reportThStyle}>Mean Reward</th>
+            <th style={reportThStyle}>Robustness</th>
+            <th style={reportThStyle}>Winner Rate</th>
+            <th style={reportThStyle}>Worst-Case</th>
+            <th style={reportThStyle}>Sweeps</th>
           </tr>
         </thead>
         <tbody>
           {ranked.map((p: any, i: number) => (
-            <tr key={p.policy_name} className="border-b hover:bg-gray-50">
-              <td className="py-2 pr-3 text-gray-500">{i + 1}</td>
-              <td className="py-2 pr-3 font-medium">{p.policy_name}</td>
-              <td className={`py-2 pr-3 font-mono ${p.overall_mean_reward === bestMean ? "text-green-700 font-bold" : ""}`}>
+            <tr key={p.policy_name}>
+              <td style={{ ...reportTdStyle, color: "var(--text-secondary)" }}>{i + 1}</td>
+              <td style={{ ...reportTdStyle, fontWeight: 500 }}>{p.policy_name}</td>
+              <td style={bestStyle(p.overall_mean_reward === bestMean)}>
                 {(p.overall_mean_reward ?? 0).toFixed(4)}
               </td>
-              <td className={`py-2 pr-3 font-mono ${p.robustness_score === bestRobust ? "text-green-700 font-bold" : ""}`}>
+              <td style={bestStyle(p.robustness_score === bestRobust)}>
                 {(p.robustness_score ?? 0).toFixed(4)}
               </td>
-              <td className={`py-2 pr-3 font-mono ${p.mean_winner_rate === bestWinner ? "text-green-700 font-bold" : ""}`}>
+              <td style={bestStyle(p.mean_winner_rate === bestWinner)}>
                 {p.mean_winner_rate != null ? `${(p.mean_winner_rate * 100).toFixed(1)}%` : "—"}
               </td>
-              <td className={`py-2 pr-3 font-mono ${p.worst_case_mean_reward === bestWorst ? "text-green-700 font-bold" : ""}`}>
+              <td style={bestStyle(p.worst_case_mean_reward === bestWorst)}>
                 {(p.worst_case_mean_reward ?? 0).toFixed(4)}
               </td>
-              <td className="py-2 font-mono">{p.n_sweeps_evaluated}</td>
+              <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{p.n_sweeps_evaluated}</td>
             </tr>
           ))}
         </tbody>
@@ -437,18 +501,18 @@ function CompetitiveStrategyGroupsSection({ strategies }: { strategies: Strategy
   const clusterIds = Object.keys(byCluster).map(Number).sort((a, b) => a - b);
 
   return (
-    <div className="mt-10 space-y-6">
-      <h2 className="text-lg font-semibold">Strategy Groups</h2>
+    <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 24 }}>
+      <h2 style={sectionHeadingStyle}>Strategy Groups</h2>
 
       {/* Cluster cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(3, 1fr)" }}>
         {clusterIds.map((cid) => (
-          <div key={cid} className="border rounded-lg p-4 bg-white shadow-sm">
-            <h3 className="font-semibold text-sm mb-1">
+          <div key={cid} style={{ background: "var(--bg-surface)", border: "1px solid var(--bg-border)", borderRadius: 8, padding: 16 }}>
+            <h3 style={{ fontWeight: 600, fontSize: 13, marginBottom: 4, color: "var(--text-primary)" }}>
               Cluster {cid}: {labels[String(cid)] ?? `Group ${cid}`}
             </h3>
-            <p className="text-xs text-gray-600 mb-2">{summaries[String(cid)] ?? ""}</p>
-            <ul className="text-xs text-gray-800 list-disc list-inside">
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>{summaries[String(cid)] ?? ""}</p>
+            <ul style={{ fontSize: 12, color: "var(--text-primary)", listStyle: "disc", paddingLeft: 16 }}>
               {byCluster[cid].map((p) => (
                 <li key={p}>{p}</li>
               ))}
@@ -458,17 +522,17 @@ function CompetitiveStrategyGroupsSection({ strategies }: { strategies: Strategy
       </div>
 
       {/* Full policy table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+      <div style={{ overflowX: "auto" }}>
+        <table style={reportTableStyle}>
           <thead>
-            <tr className="border-b text-left">
-              <th className="py-2 pr-3">Policy</th>
-              <th className="py-2 pr-3">Cluster</th>
-              <th className="py-2 pr-3">Label</th>
-              <th className="py-2 pr-3">Mean Reward</th>
-              <th className="py-2 pr-3">Winner Rate</th>
-              <th className="py-2 pr-3">Robustness</th>
-              <th className="py-2 pr-3">Worst-Case</th>
+            <tr>
+              <th style={reportThStyle}>Policy</th>
+              <th style={reportThStyle}>Cluster</th>
+              <th style={reportThStyle}>Label</th>
+              <th style={reportThStyle}>Mean Reward</th>
+              <th style={reportThStyle}>Winner Rate</th>
+              <th style={reportThStyle}>Robustness</th>
+              <th style={reportThStyle}>Worst-Case</th>
             </tr>
           </thead>
           <tbody>
@@ -476,14 +540,14 @@ function CompetitiveStrategyGroupsSection({ strategies }: { strategies: Strategy
               const f = (features[p] ?? {}) as Record<string, unknown>;
               const cid = clusters[p];
               return (
-                <tr key={p} className="border-b hover:bg-gray-50">
-                  <td className="py-2 pr-3 font-medium">{p}</td>
-                  <td className="py-2 pr-3 font-mono">{cid}</td>
-                  <td className="py-2 pr-3">{labels[String(cid)] ?? "—"}</td>
-                  <td className="py-2 pr-3 font-mono">{competitiveFmt(f.mean_reward as number | null)}</td>
-                  <td className="py-2 pr-3 font-mono">{competitiveFmt(f.winner_rate as number | null, true)}</td>
-                  <td className="py-2 pr-3 font-mono">{competitiveFmt(f.robustness_score as number | null)}</td>
-                  <td className="py-2 pr-3 font-mono">{competitiveFmt(f.worst_case_reward as number | null)}</td>
+                <tr key={p}>
+                  <td style={{ ...reportTdStyle, fontWeight: 500 }}>{p}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{cid}</td>
+                  <td style={reportTdStyle}>{labels[String(cid)] ?? "—"}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{competitiveFmt(f.mean_reward as number | null)}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{competitiveFmt(f.winner_rate as number | null, true)}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{competitiveFmt(f.robustness_score as number | null)}</td>
+                  <td style={{ ...reportTdStyle, fontFamily: "var(--font-mono)" }}>{competitiveFmt(f.worst_case_reward as number | null)}</td>
                 </tr>
               );
             })}

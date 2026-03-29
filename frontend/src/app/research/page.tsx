@@ -25,6 +25,7 @@ function inferType(id: string): "Robustness" | "Strategy" | "Benchmark" | "Other
   if (id.startsWith("robust_")) return "Robustness";
   if (id.startsWith("eval_")) return "Strategy";
   if (id.startsWith("benchmark_")) return "Benchmark";
+  if (id.startsWith("competitive_")) return "Robustness";
   return "Other";
 }
 
@@ -257,13 +258,17 @@ export default function ResearchPage() {
   }
 
   // Sort
-  // TODO: "Highest robustness score" sort requires fetching individual report
-  // data for scores. For now, both modes sort by timestamp descending.
-  merged.sort((a, b) => {
-    const ta = new Date(a.timestamp).getTime() || 0;
-    const tb = new Date(b.timestamp).getTime() || 0;
-    return tb - ta;
-  });
+  if (sort === "robustness") {
+    // No scores available from list endpoint — use report ID descending as proxy
+    merged.sort((a, b) => b.report_id.localeCompare(a.report_id));
+  } else {
+    // "latest" — sort by timestamp descending
+    merged.sort((a, b) => {
+      const ta = new Date(a.timestamp).getTime() || 0;
+      const tb = new Date(b.timestamp).getTime() || 0;
+      return tb - ta;
+    });
+  }
 
   return (
     <main
@@ -357,6 +362,11 @@ export default function ResearchPage() {
             <option value="latest">Latest first</option>
             <option value="robustness">Highest robustness score</option>
           </select>
+          {sort === "robustness" && (
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
+              Robustness scores available in report detail
+            </div>
+          )}
         </div>
       </div>
 

@@ -69,7 +69,7 @@ export default function ReplayPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <Link href="/simulate/resource-sharing" className="text-blue-500 hover:underline text-sm">
-            &larr; Runs
+            &larr; Resource Sharing
           </Link>
           <h1 className="text-2xl font-bold">
             Replay <span className="font-mono">{run_id}</span>
