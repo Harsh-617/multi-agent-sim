@@ -464,3 +464,36 @@
 - Robustness seeds schema mismatch — fixed
 - Heatmap data transformation — fixed
 - Replay crash on competitive runs — fixed
+
+
+## Frontend Redesign
+
+### Phase 1: Design & Planning
+- Full feature inventory completed from browser walkthrough
+- Decisions documented in docs/frontend-redesign.md:
+  - Navigation: B+ structure (Simulate / League / Research)
+  - Theme: dark, technical, data-forward
+  - Accent color: teal (#14b8a6)
+  - Template names: Resource Sharing Arena, Head-to-Head Strategy
+  - Coming-soon templates: 4 grayed-out cards
+  - Advanced mode: full config toggle on /simulate
+  - Branch: feat/frontend-redesign
+
+### Phase 2: Implementation (10 prompts)
+- Prompt 1: Dark theme tokens + global Nav component
+- Prompt 2: New URL structure + redirects
+- Prompt 3: Simulate index page (template picker + advanced mode)
+- Prompt 4: Template pages (resource-sharing + head-to-head)
+- Prompt 5: Home page (hero, stats bar, feature highlights, quick-start)
+- Prompt 6: Unified League page (archetype switcher + all tabs)
+- Prompt 7: Research index (filter bar + unified report cards)
+- Prompt 8: Move run/replay/report detail pages to new URLs
+- Prompt 9: Delete old routes (competitive/*, runs, reports, run, replay)
+- Prompt 10: Final verification pass — 2 bugs found and fixed
+
+### Verified
+- npm run build passes with zero errors and zero warnings
+- All 12 routes compile cleanly
+- All redirects fire correctly
+- All back links point to correct URLs
+- Nav active states correct for all routes
