@@ -179,95 +179,80 @@ export default function HomePage() {
   const stats = useHomeStats();
 
   return (
-    <main style={{ paddingTop: 48 /* account for fixed nav */ }}>
-      {/* ── Hero ── */}
-      <section style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
-        <div
-          className="hero-grid"
+    <div style={{ position: "relative", overflow: "hidden", minHeight: "100vh" }}>
+      <AgentCanvas />
+      <main style={{ paddingTop: 48 /* account for fixed nav */ }}>
+        {/* ── Hero ── */}
+        <section
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: 48,
-            alignItems: "center",
+            padding: "80px 24px",
+            textAlign: "center",
+            maxWidth: 680,
+            margin: "0 auto",
+            position: "relative",
+            zIndex: 1,
           }}
         >
-          {/* Left: text */}
-          <div>
-            {/* Eyebrow */}
-            <div
-              style={{
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: "var(--accent)",
-                marginBottom: 16,
-              }}
-            >
-              Multi-Agent Simulation Platform
-            </div>
-
-            {/* Headline */}
-            <h1
-              style={{
-                fontSize: 42,
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                lineHeight: 1.15,
-                marginBottom: 16,
-                marginTop: 0,
-              }}
-            >
-              A research platform for emergent multi-agent strategy
-            </h1>
-
-            {/* Subheadline */}
-            <p
-              style={{
-                fontSize: 16,
-                color: "var(--text-secondary)",
-                lineHeight: 1.6,
-                marginBottom: 32,
-                marginTop: 0,
-              }}
-            >
-              Train agents, run leagues, and study how strategies emerge in
-              configurable multi-agent environments. Built for researchers.
-            </p>
-
-            {/* CTAs */}
-            <div style={{ display: "flex", gap: 12 }}>
-              <PrimaryCTA />
-              <SecondaryCTA />
-            </div>
-          </div>
-
-          {/* Right: animated canvas */}
+          {/* Eyebrow */}
           <div
             style={{
-              background: "#0d0d0d",
-              border: "1px solid #1e1e1e",
-              borderRadius: 12,
-              overflow: "hidden",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              fontSize: 11,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              color: "var(--accent)",
+              marginBottom: 16,
             }}
           >
-            <AgentCanvas />
+            Multi-Agent Simulation Platform
           </div>
-        </div>
-      </section>
 
-      {/* ── Stats Bar ── */}
-      <section
-        style={{
-          background: "var(--bg-surface)",
-          borderTop: "1px solid var(--bg-border)",
-          borderBottom: "1px solid var(--bg-border)",
-          padding: "20px 24px",
-          marginTop: 60,
-        }}
-      >
+          {/* Headline */}
+          <h1
+            style={{
+              fontSize: 42,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              lineHeight: 1.15,
+              marginBottom: 16,
+              marginTop: 0,
+            }}
+          >
+            A research platform for emergent multi-agent strategy
+          </h1>
+
+          {/* Subheadline */}
+          <p
+            style={{
+              fontSize: 16,
+              color: "var(--text-secondary)",
+              lineHeight: 1.6,
+              marginBottom: 32,
+              marginTop: 0,
+            }}
+          >
+            Train agents, run leagues, and study how strategies emerge in
+            configurable multi-agent environments. Built for researchers.
+          </p>
+
+          {/* CTAs */}
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <PrimaryCTA />
+            <SecondaryCTA />
+          </div>
+        </section>
+
+        {/* ── Stats Bar ── */}
+        <section
+          style={{
+            background: "var(--bg-surface)",
+            borderTop: "1px solid var(--bg-border)",
+            borderBottom: "1px solid var(--bg-border)",
+            padding: "20px 24px",
+            marginTop: 60,
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
         <div
           style={{
             display: "flex",
@@ -313,6 +298,8 @@ export default function HomePage() {
           padding: "60px 24px",
           maxWidth: 960,
           margin: "0 auto",
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div style={{ display: "flex", gap: 16 }}>
@@ -371,6 +358,8 @@ export default function HomePage() {
           margin: "0 auto",
           marginBottom: 80,
           textAlign: "center",
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div
@@ -415,6 +404,7 @@ export default function HomePage() {
           Or explore all environments →
         </Link>
       </section>
-    </main>
+      </main>
+    </div>
   );
 }

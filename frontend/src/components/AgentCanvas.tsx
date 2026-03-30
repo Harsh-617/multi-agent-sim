@@ -13,10 +13,8 @@ interface Agent {
   vx: number;
   vy: number;
   radius: number;
-  label: string;
   color: string;
-  rating: number;
-  isChampion: boolean;
+  label: string;
 }
 
 const LABELS: [string, string][] = [
@@ -24,13 +22,10 @@ const LABELS: [string, string][] = [
   ["Aggressive", "#ef4444"],
   ["Robust", "#14b8a6"],
   ["Unstable", "#6b7280"],
-  ["Developing", "#555555"],
+  ["Developing", "#444444"],
 ];
 
-const WIDTH = 480;
-const HEIGHT = 320;
-const CONNECTION_DIST = 80;
-const PADDING = 30;
+const CONNECTION_DIST = 120;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,41 +35,45 @@ function rand(min: number, max: number) {
   return Math.random() * (max - min) + min;
 }
 
-function createAgents(): Agent[] {
+function createAgents(w: number, h: number): Agent[] {
   const agents: Agent[] = [];
+  const pad = 20;
 
   // Champion
   agents.push({
     id: 0,
-    x: rand(PADDING, WIDTH - PADDING),
-    y: rand(PADDING, HEIGHT - PADDING),
-    vx: rand(-0.4, 0.4),
-    vy: rand(-0.4, 0.4),
-    radius: 11,
+    x: rand(pad, w - pad),
+    y: rand(pad, h - pad),
+    vx: rand(-0.25, 0.25),
+    vy: rand(-0.25, 0.25),
+    radius: 7,
     label: "Champion",
     color: "#14b8a6",
-    rating: Math.floor(rand(1000, 1200)),
-    isChampion: true,
   });
 
   // Other agents
-  for (let i = 1; i < 10; i++) {
+  for (let i = 1; i < 16; i++) {
     const [label, color] = LABELS[Math.floor(Math.random() * LABELS.length)];
     agents.push({
       id: i,
-      x: rand(PADDING, WIDTH - PADDING),
-      y: rand(PADDING, HEIGHT - PADDING),
-      vx: rand(-0.4, 0.4),
-      vy: rand(-0.4, 0.4),
-      radius: Math.floor(rand(5, 10)),
+      x: rand(pad, w - pad),
+      y: rand(pad, h - pad),
+      vx: rand(-0.25, 0.25),
+      vy: rand(-0.25, 0.25),
+      radius: Math.floor(rand(3, 7)),
       label,
       color,
-      rating: Math.floor(rand(800, 1200)),
-      isChampion: false,
     });
   }
 
   return agents;
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,9 +82,8 @@ function createAgents(): Agent[] {
 
 export default function AgentCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const agentsRef = useRef<Agent[]>(createAgents());
+  const agentsRef = useRef<Agent[]>([]);
   const rafRef = useRef<number>(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -93,19 +91,30 @@ export default function AgentCanvas() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Size canvas to window
+    function resize() {
+      if (!canvas) return;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+
+    // Create agents sized to current viewport
+    agentsRef.current = createAgents(canvas.width, canvas.height);
+
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
     // --- draw one frame ---
     function draw() {
+      if (!canvas || !ctx) return;
       const agents = agentsRef.current;
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const c = ctx!;
+      const w = canvas.width;
+      const h = canvas.height;
 
-      // Clear
-      c.fillStyle = "#0d0d0d";
-      c.fillRect(0, 0, WIDTH, HEIGHT);
+      // Clear (fully transparent)
+      ctx.clearRect(0, 0, w, h);
 
       // Connection lines
       for (let i = 0; i < agents.length; i++) {
@@ -114,88 +123,44 @@ export default function AgentCanvas() {
           const dy = agents[i].y - agents[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < CONNECTION_DIST) {
-            const opacity = (1 - dist / CONNECTION_DIST) * 0.25;
-            c.beginPath();
-            c.moveTo(agents[i].x, agents[i].y);
-            c.lineTo(agents[j].x, agents[j].y);
-            c.strokeStyle = `rgba(20,184,166,${opacity})`;
-            c.lineWidth = 0.5;
-            c.stroke();
+            const opacity = (1 - dist / CONNECTION_DIST) * 0.12;
+            ctx.beginPath();
+            ctx.moveTo(agents[i].x, agents[i].y);
+            ctx.lineTo(agents[j].x, agents[j].y);
+            ctx.strokeStyle = `rgba(20,184,166,${opacity})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
           }
         }
       }
 
-      // Agents
+      // Agents — simple filled circles only
       for (const agent of agents) {
-        // Champion glow ring
-        if (agent.isChampion) {
-          c.beginPath();
-          c.arc(agent.x, agent.y, agent.radius + 3, 0, Math.PI * 2);
-          c.strokeStyle = `rgba(20,184,166,0.15)`;
-          c.lineWidth = 1;
-          c.stroke();
-        }
-
-        // Main circle
-        c.beginPath();
-        c.arc(agent.x, agent.y, agent.radius, 0, Math.PI * 2);
-        c.fillStyle = hexToRgba(agent.color, 0.85);
-        c.fill();
-
-        // Inner highlight
-        c.beginPath();
-        c.arc(
-          agent.x - agent.radius * 0.25,
-          agent.y - agent.radius * 0.25,
-          agent.radius * 0.35,
-          0,
-          Math.PI * 2
-        );
-        c.fillStyle = "rgba(255,255,255,0.15)";
-        c.fill();
-
-        // Champion crown
-        if (agent.isChampion) {
-          c.font = "8px sans-serif";
-          c.fillStyle = "#f59e0b";
-          c.textAlign = "center";
-          c.fillText("★", agent.x, agent.y - agent.radius - 18);
-        }
-
-        // Label
-        c.font = "8px sans-serif";
-        c.fillStyle = agent.color;
-        c.textAlign = "center";
-        c.fillText(agent.label, agent.x, agent.y - agent.radius - 10);
-
-        // Rating
-        c.font = "9px sans-serif";
-        c.fillStyle = "#555555";
-        c.textAlign = "center";
-        c.fillText(
-          String(Math.floor(agent.rating)),
-          agent.x,
-          agent.y + agent.radius + 12
-        );
+        ctx.beginPath();
+        ctx.arc(agent.x, agent.y, agent.radius, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(agent.color, 0.4);
+        ctx.fill();
       }
     }
 
     // --- animation loop ---
     function animate() {
+      if (!canvas) return;
       const agents = agentsRef.current;
+      const w = canvas.width;
+      const h = canvas.height;
 
-      // Move agents
       for (const agent of agents) {
         agent.x += agent.vx;
         agent.y += agent.vy;
 
-        if (agent.x - agent.radius < 0 || agent.x + agent.radius > WIDTH) {
+        if (agent.x - agent.radius < 0 || agent.x + agent.radius > w) {
           agent.vx = -agent.vx;
-          agent.x = Math.max(agent.radius, Math.min(WIDTH - agent.radius, agent.x));
+          agent.x = Math.max(agent.radius, Math.min(w - agent.radius, agent.x));
         }
-        if (agent.y - agent.radius < 0 || agent.y + agent.radius > HEIGHT) {
+        if (agent.y - agent.radius < 0 || agent.y + agent.radius > h) {
           agent.vy = -agent.vy;
-          agent.y = Math.max(agent.radius, Math.min(HEIGHT - agent.radius, agent.y));
+          agent.y = Math.max(agent.radius, Math.min(h - agent.radius, agent.y));
         }
       }
 
@@ -204,45 +169,33 @@ export default function AgentCanvas() {
     }
 
     if (reducedMotion) {
-      // Static render only
       draw();
     } else {
       rafRef.current = requestAnimationFrame(animate);
     }
 
-    // Rating bump every 3s
-    intervalRef.current = setInterval(() => {
-      const agents = agentsRef.current;
-      const nonChampions = agents.filter((a) => !a.isChampion);
-      const target = nonChampions[Math.floor(Math.random() * nonChampions.length)];
-      if (target) {
-        target.rating += Math.floor(rand(10, 31));
-      }
-    }, 3000);
+    window.addEventListener("resize", resize);
 
     return () => {
       cancelAnimationFrame(rafRef.current);
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      window.removeEventListener("resize", resize);
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      width={WIDTH}
-      height={HEIGHT}
-      style={{ display: "block", width: WIDTH, height: HEIGHT }}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        zIndex: 0,
+        pointerEvents: "none",
+        opacity: 0.35,
+        background: "transparent",
+      }}
     />
   );
-}
-
-// ---------------------------------------------------------------------------
-// Utility
-// ---------------------------------------------------------------------------
-
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }
