@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import AgentCanvas from "@/components/AgentCanvas";
+import LineageAnimation from "@/components/LineageAnimation";
 
 // ---------------------------------------------------------------------------
 // Stats hook — fetches counts from multiple endpoints, non-blocking
@@ -178,39 +178,12 @@ function QuickStartButton({ href, label }: { href: string; label: string }) {
 export default function HomePage() {
   const stats = useHomeStats();
 
-  const heroRef = useRef<HTMLDivElement>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
-  const featuresRef = useRef<HTMLDivElement>(null);
-  const quickstartRef = useRef<HTMLDivElement>(null);
-  const [obstacleZones, setObstacleZones] = useState<DOMRect[]>([]);
-
-  useLayoutEffect(() => {
-    function updateZones() {
-      const zones: DOMRect[] = [];
-      const addZone = (el: HTMLElement | null) => {
-        if (!el) return;
-        zones.push(
-          new DOMRect(el.offsetLeft, el.offsetTop, el.offsetWidth, el.offsetHeight)
-        );
-      };
-      addZone(heroRef.current);
-      addZone(statsRef.current);
-      addZone(featuresRef.current);
-      addZone(quickstartRef.current);
-      setObstacleZones(zones);
-    }
-    updateZones();
-    window.addEventListener("resize", updateZones);
-    return () => window.removeEventListener("resize", updateZones);
-  }, []);
-
   return (
     <div style={{ position: "relative", overflow: "hidden", minHeight: "100vh" }}>
-      <AgentCanvas obstacleZones={obstacleZones} />
+      <LineageAnimation />
       <main style={{ paddingTop: 48 /* account for fixed nav */ }}>
         {/* ── Hero ── */}
         <section
-          ref={heroRef}
           style={{
             padding: "80px 24px",
             textAlign: "center",
@@ -271,7 +244,6 @@ export default function HomePage() {
 
         {/* ── Stats Bar ── */}
         <section
-          ref={statsRef}
           style={{
             background: "var(--bg-surface)",
             borderTop: "1px solid var(--bg-border)",
@@ -443,7 +415,6 @@ export default function HomePage() {
 
       {/* ── Feature Highlights ── */}
       <section
-        ref={featuresRef}
         style={{
           padding: "60px 24px",
           maxWidth: 960,
@@ -500,9 +471,86 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── What You Can Study ── */}
+      <section style={{
+        padding: "60px 24px",
+        maxWidth: 960,
+        margin: "0 auto",
+        position: "relative",
+        zIndex: 1,
+      }}>
+        <p style={{
+          fontSize: 11, fontWeight: 500,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase" as const,
+          color: "var(--accent)",
+          marginBottom: 12,
+          textAlign: "center",
+        }}>Research questions</p>
+
+        <h2 style={{
+          fontSize: 28, fontWeight: 500,
+          color: "var(--text-primary)",
+          textAlign: "center",
+          marginBottom: 48, lineHeight: 1.2,
+        }}>What this platform helps you study</h2>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 16,
+        }} className="research-grid">
+          {[
+            {
+              q: "When do agents cooperate vs defect?",
+              desc: "Configure a shared-resource environment and watch as agents discover whether cooperation or exploitation leads to better long-term outcomes.",
+              tag: "Resource Sharing",
+              tagColor: "var(--accent)",
+            },
+            {
+              q: "Which strategies survive stress testing?",
+              desc: "Run robustness sweeps across 20 environment variants. See which policies hold up under information asymmetry, resource scarcity, and uncertainty.",
+              tag: "Robustness",
+              tagColor: "#f59e0b",
+            },
+            {
+              q: "How do playstyles evolve across generations?",
+              desc: "League-based self-play produces a lineage of agents. Strategy clustering reveals how behavioral patterns shift as policies improve.",
+              tag: "Evolution",
+              tagColor: "#8b5cf6",
+            },
+          ].map((item) => (
+            <div key={item.q} style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--bg-border)",
+              borderRadius: 8,
+              padding: 24,
+            }}>
+              <span style={{
+                fontSize: 10, fontWeight: 500,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase" as const,
+                color: item.tagColor,
+                marginBottom: 12,
+                display: "block",
+              }}>{item.tag}</span>
+              <h3 style={{
+                fontSize: 15, fontWeight: 500,
+                color: "var(--text-primary)",
+                marginBottom: 10, lineHeight: 1.3,
+              }}>{item.q}</h3>
+              <p style={{
+                fontSize: 13,
+                color: "var(--text-secondary)",
+                lineHeight: 1.6,
+              }}>{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── Quick Start ── */}
       <section
-        ref={quickstartRef}
         style={{
           padding: "40px 24px",
           maxWidth: 680,

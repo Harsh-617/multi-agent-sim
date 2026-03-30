@@ -40,5 +40,8 @@ body {
   .steps-grid {
     grid-template-columns: repeat(2, 1fr) !important;
   }
+  .research-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
