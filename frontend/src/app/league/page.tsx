@@ -35,6 +35,7 @@ import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
 import ChampionRobustness from "@/components/ChampionRobustness";
 import LeagueEvolution from "@/components/LeagueEvolution";
+import LineageGraph from "@/components/LineageGraph";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,109 +60,6 @@ function compLabelColor(label: string): string {
   return COMP_LABEL_COLOR[label] ?? "#9ca3af";
 }
 
-// Lineage SVG helpers
-
-interface CompLineageNode {
-  id: string;
-  parent_id: string | null;
-  rating: number;
-  label: string;
-  created_at: string | null;
-  notes: string | null;
-  children: CompLineageNode[];
-  depth: number;
-  x: number;
-  y: number;
-}
-
-function buildCompLineageForest(
-  members: CompetitiveEvolutionMember[],
-): CompLineageNode[] {
-  const byId = new Map<string, CompetitiveEvolutionMember>();
-  for (const m of members) byId.set(m.member_id, m);
-
-  const childrenMap = new Map<string, string[]>();
-  const roots: string[] = [];
-
-  for (const m of members) {
-    if (m.parent_id && byId.has(m.parent_id)) {
-      const siblings = childrenMap.get(m.parent_id) || [];
-      siblings.push(m.member_id);
-      childrenMap.set(m.parent_id, siblings);
-    } else {
-      roots.push(m.member_id);
-    }
-  }
-
-  function build(id: string, depth: number): CompLineageNode {
-    const m = byId.get(id)!;
-    const kids = (childrenMap.get(id) || []).map((cid) =>
-      build(cid, depth + 1),
-    );
-    return {
-      id: m.member_id,
-      parent_id: m.parent_id,
-      rating: m.rating,
-      label: m.strategy.label,
-      created_at: m.created_at,
-      notes: m.notes,
-      children: kids,
-      depth,
-      x: 0,
-      y: 0,
-    };
-  }
-
-  return roots.map((id) => build(id, 0));
-}
-
-function flattenCompLineageNodes(forest: CompLineageNode[]): CompLineageNode[] {
-  const all: CompLineageNode[] = [];
-  function walk(n: CompLineageNode) {
-    all.push(n);
-    n.children.forEach(walk);
-  }
-  forest.forEach(walk);
-  return all;
-}
-
-function layoutCompLineageTree(forest: CompLineageNode[]): {
-  nodes: CompLineageNode[];
-  width: number;
-  height: number;
-} {
-  const nodes = flattenCompLineageNodes(forest);
-  if (nodes.length === 0) return { nodes: [], width: 0, height: 0 };
-
-  const byDepth = new Map<number, CompLineageNode[]>();
-  for (const n of nodes) {
-    const group = byDepth.get(n.depth) || [];
-    group.push(n);
-    byDepth.set(n.depth, group);
-  }
-
-  const maxDepth = Math.max(...nodes.map((n) => n.depth));
-  const nodeSpacingX = 120;
-  const nodeSpacingY = 80;
-  const padX = 60;
-  const padY = 40;
-
-  let maxWidth = 0;
-  for (let d = 0; d <= maxDepth; d++) {
-    const group = byDepth.get(d) || [];
-    for (let i = 0; i < group.length; i++) {
-      group[i].x = padX + i * nodeSpacingX;
-      group[i].y = padY + d * nodeSpacingY;
-    }
-    maxWidth = Math.max(maxWidth, group.length * nodeSpacingX);
-  }
-
-  return {
-    nodes,
-    width: maxWidth + padX * 2,
-    height: (maxDepth + 1) * nodeSpacingY + padY * 2,
-  };
-}
 
 // Bar chart for competitive benchmark
 
@@ -229,138 +127,6 @@ function CompetitiveBarChart({
         );
       })}
     </svg>
-  );
-}
-
-// Competitive lineage SVG component
-
-function CompLineageSVG({
-  members,
-  onSelect,
-  selectedId,
-}: {
-  members: CompetitiveEvolutionMember[];
-  onSelect: (m: CompetitiveEvolutionMember | null) => void;
-  selectedId: string | null;
-}) {
-  if (members.length === 0) {
-    return <p className="text-gray-500 text-sm">No members to display.</p>;
-  }
-
-  const forest = buildCompLineageForest(members);
-  const { nodes, width, height } = layoutCompLineageTree(forest);
-
-  const ratings = members.map((m) => m.rating);
-  const minR = ratings.length > 0 ? Math.min(...ratings) : 0;
-  const maxR = ratings.length > 0 ? Math.max(...ratings) : 1;
-  const rangeR = maxR - minR || 1;
-
-  function nodeRadius(rating: number) {
-    return 10 + ((rating - minR) / rangeR) * 10;
-  }
-
-  function strokeThickness(rating: number) {
-    return 1 + ((rating - minR) / rangeR) * 2;
-  }
-
-  const nodeById = new Map<string, CompLineageNode>();
-  for (const n of nodes) nodeById.set(n.id, n);
-
-  const edges: { x1: number; y1: number; x2: number; y2: number }[] = [];
-  for (const n of nodes) {
-    if (n.parent_id && nodeById.has(n.parent_id)) {
-      const parent = nodeById.get(n.parent_id)!;
-      edges.push({ x1: parent.x, y1: parent.y, x2: n.x, y2: n.y });
-    }
-  }
-
-  const memberById = new Map<string, CompetitiveEvolutionMember>();
-  for (const m of members) memberById.set(m.member_id, m);
-
-  const suffix = (id: string) => id.slice(-6);
-
-  return (
-    <>
-      {/* Legend */}
-      <div className="flex gap-4 mb-2 text-xs">
-        {Object.entries(COMP_LABEL_COLOR).map(([label, color]) => (
-          <span key={label} className="flex items-center gap-1">
-            <span
-              style={{
-                background: color,
-                display: "inline-block",
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-              }}
-            />
-            {label}
-          </span>
-        ))}
-      </div>
-
-      <div className="overflow-auto border border-gray-200 rounded">
-        <svg
-          width={Math.max(width, 200)}
-          height={Math.max(height, 120)}
-          className="block"
-        >
-          {edges.map((e, i) => (
-            <line
-              key={i}
-              x1={e.x1}
-              y1={e.y1}
-              x2={e.x2}
-              y2={e.y2}
-              stroke="#9ca3af"
-              strokeWidth={1.5}
-            />
-          ))}
-          {nodes.map((n) => {
-            const r = nodeRadius(n.rating);
-            const sw = strokeThickness(n.rating);
-            const isSelected = selectedId === n.id;
-            const fill = compLabelColor(n.label);
-            return (
-              <g
-                key={n.id}
-                onClick={() => onSelect(memberById.get(n.id) ?? null)}
-                className="cursor-pointer"
-              >
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={fill}
-                  stroke={isSelected ? "#000" : "#6b7280"}
-                  strokeWidth={isSelected ? 2.5 : sw}
-                  opacity={0.9}
-                />
-                <text
-                  x={n.x}
-                  y={n.y + r + 14}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill="currentColor"
-                >
-                  {suffix(n.id)}
-                </text>
-                <text
-                  x={n.x}
-                  y={n.y + 4}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fill="#fff"
-                  fontWeight="bold"
-                >
-                  {n.rating.toFixed(0)}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    </>
   );
 }
 
@@ -469,10 +235,6 @@ export default function LeaguePage() {
   // Recompute feedback state (per archetype so only one message shows)
   const [rsRecomputeStatus, setRsRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [hhRecomputeStatus, setHhRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
-
-  // Competitive lineage/evolution selection
-  const [hhSelectedEvolution, setHhSelectedEvolution] =
-    useState<CompetitiveEvolutionMember | null>(null);
 
   // --- Load Resource Sharing data ---
   async function loadResourceSharing() {
@@ -991,80 +753,16 @@ export default function LeaguePage() {
               {tab === "lineage" && (
                 <div>
                   <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Lineage Graph</h3>
-                  <div style={{ display: "flex", flexDirection: "row", transition: "all 200ms" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <CompLineageSVG
-                        members={hhEvolutionData.members}
-                        onSelect={setHhSelectedEvolution}
-                        selectedId={hhSelectedEvolution?.member_id ?? null}
-                      />
-                    </div>
-
-                    {hhSelectedEvolution && (
-                      <div style={{
-                        width: 220,
-                        flexShrink: 0,
-                        background: "var(--bg-elevated)",
-                        borderLeft: "1px solid var(--bg-border)",
-                        padding: 16,
-                        fontSize: 13,
-                        color: "var(--text-primary)",
-                      }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <h4 style={{ fontWeight: 700, margin: 0 }}>Details</h4>
-                          <button
-                            onClick={() => setHhSelectedEvolution(null)}
-                            style={{ fontSize: 16, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
-                          >
-                            &times;
-                          </button>
-                        </div>
-                        <dl style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Member ID</dt>
-                          <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                            {hhSelectedEvolution.member_id}
-                          </dd>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Label</dt>
-                          <dd>
-                            <span
-                              style={{
-                                fontWeight: 500,
-                                color: compLabelColor(
-                                  hhSelectedEvolution.strategy.label,
-                                ),
-                              }}
-                            >
-                              {hhSelectedEvolution.strategy.label}
-                            </span>
-                          </dd>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Rating</dt>
-                          <dd>{hhSelectedEvolution.rating.toFixed(1)}</dd>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Parent</dt>
-                          <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                            {hhSelectedEvolution.parent_id ?? "none"}
-                          </dd>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Cluster</dt>
-                          <dd>
-                            {hhSelectedEvolution.strategy.cluster_id ?? "—"}
-                          </dd>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Robustness</dt>
-                          <dd>
-                            {hhSelectedEvolution.robustness_score != null
-                              ? hhSelectedEvolution.robustness_score.toFixed(3)
-                              : "—"}
-                          </dd>
-                          <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Created</dt>
-                          <dd style={{ fontSize: 11 }}>
-                            {hhSelectedEvolution.created_at
-                              ? new Date(
-                                  hhSelectedEvolution.created_at,
-                                ).toLocaleString()
-                              : "—"}
-                          </dd>
-                        </dl>
-                      </div>
-                    )}
-                  </div>
+                  <LineageGraph nodes={hhEvolutionData.members.map(m => ({
+                    id: m.member_id,
+                    parent_id: m.parent_id,
+                    rating: m.rating,
+                    label: m.strategy?.label,
+                    cluster: m.strategy?.cluster_id,
+                    robustness: m.robustness_score,
+                    created_at: m.created_at,
+                    notes: m.notes,
+                  }))} />
                 </div>
               )}
 
@@ -1317,84 +1015,16 @@ export default function LeaguePage() {
                         history.
                       </p>
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "row", transition: "all 200ms" }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <CompLineageSVG
-                            members={hhEvolutionData.members}
-                            onSelect={setHhSelectedEvolution}
-                            selectedId={hhSelectedEvolution?.member_id ?? null}
-                          />
-                        </div>
-
-                        {hhSelectedEvolution && (
-                          <div style={{
-                            width: 220,
-                            flexShrink: 0,
-                            background: "var(--bg-elevated)",
-                            borderLeft: "1px solid var(--bg-border)",
-                            padding: 16,
-                            fontSize: 13,
-                            color: "var(--text-primary)",
-                          }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <h4 style={{ fontWeight: 700, margin: 0 }}>Details</h4>
-                              <button
-                                onClick={() => setHhSelectedEvolution(null)}
-                                style={{ fontSize: 16, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
-                              >
-                                &times;
-                              </button>
-                            </div>
-                            <dl style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Member ID</dt>
-                              <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                                {hhSelectedEvolution.member_id}
-                              </dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Label</dt>
-                              <dd>
-                                <span
-                                  style={{
-                                    fontWeight: 500,
-                                    color: compLabelColor(
-                                      hhSelectedEvolution.strategy.label,
-                                    ),
-                                  }}
-                                >
-                                  {hhSelectedEvolution.strategy.label}
-                                </span>
-                              </dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Rating</dt>
-                              <dd>{hhSelectedEvolution.rating.toFixed(1)}</dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Parent</dt>
-                              <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                                {hhSelectedEvolution.parent_id ?? "none"}
-                              </dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Cluster</dt>
-                              <dd>
-                                {hhSelectedEvolution.strategy.cluster_id ?? "—"}
-                              </dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Robustness</dt>
-                              <dd>
-                                {hhSelectedEvolution.robustness_score != null
-                                  ? hhSelectedEvolution.robustness_score.toFixed(3)
-                                  : "—"}
-                              </dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Created</dt>
-                              <dd style={{ fontSize: 11 }}>
-                                {hhSelectedEvolution.created_at
-                                  ? new Date(
-                                      hhSelectedEvolution.created_at,
-                                    ).toLocaleString()
-                                  : "—"}
-                              </dd>
-                              <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Notes</dt>
-                              <dd style={{ fontSize: 11 }}>
-                                {hhSelectedEvolution.notes ?? "—"}
-                              </dd>
-                            </dl>
-                          </div>
-                        )}
-                      </div>
+                      <LineageGraph nodes={hhEvolutionData.members.map(m => ({
+                        id: m.member_id,
+                        parent_id: m.parent_id,
+                        rating: m.rating,
+                        label: m.strategy?.label,
+                        cluster: m.strategy?.cluster_id,
+                        robustness: m.robustness_score,
+                        created_at: m.created_at,
+                        notes: m.notes,
+                      }))} />
                     )}
                   </div>
 
