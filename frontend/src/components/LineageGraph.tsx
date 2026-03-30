@@ -27,13 +27,17 @@ export interface LineageGraphProps {
 // ---------------------------------------------------------------------------
 
 const LABEL_COLORS: Record<string, string> = {
-  Champion: "#14b8a6",
+  Champion: "#f59e0b",
   Dominant: "#f59e0b",
   Aggressive: "#ef4444",
   Consistent: "#22c55e",
   Weak: "#6b7280",
   Competitive: "#8b5cf6",
   Developing: "#6b7280",
+  Unstable: "#6b7280",
+  Exploitative: "#ef4444",
+  Cooperative: "#22c55e",
+  Robust: "#14b8a6",
 };
 
 function accentColor(label?: string): string {

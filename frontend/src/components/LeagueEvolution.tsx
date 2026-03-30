@@ -12,8 +12,16 @@ interface Props {
 
 const LABEL_COLOR: Record<string, string> = {
   Champion: "#f59e0b",
-  Competitive: "#3b82f6",
-  Developing: "#9ca3af",
+  Dominant: "#f59e0b",
+  Aggressive: "#ef4444",
+  Consistent: "#22c55e",
+  Weak: "#6b7280",
+  Competitive: "#8b5cf6",
+  Developing: "#6b7280",
+  Unstable: "#6b7280",
+  Exploitative: "#ef4444",
+  Cooperative: "#22c55e",
+  Robust: "#14b8a6",
 };
 
 function labelColor(label: string): string {
@@ -52,7 +60,7 @@ function ChampionHistoryCard({
             style={{
               fontSize: 11,
               color: "#555555",
-              fontFamily: "monospace",
+              fontFamily: "'JetBrains Mono', monospace",
             }}
           >
             #{idx + 1}
@@ -80,7 +88,7 @@ function ChampionHistoryCard({
         style={{
           fontSize: 11,
           color: "#666666",
-          fontFamily: "monospace",
+          fontFamily: "'JetBrains Mono', monospace",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
