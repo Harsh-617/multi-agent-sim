@@ -466,8 +466,9 @@ export default function LeaguePage() {
   const [hhRobSeed, setHhRobSeed] = useState(42);
   const [hhRobRunning, setHhRobRunning] = useState(false);
 
-  // Recompute feedback state
-  const [recomputeStatus, setRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  // Recompute feedback state (per archetype so only one message shows)
+  const [rsRecomputeStatus, setRsRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [hhRecomputeStatus, setHhRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
 
   // Competitive lineage/evolution selection
   const [hhSelectedEvolution, setHhSelectedEvolution] =
@@ -531,17 +532,17 @@ export default function LeaguePage() {
   async function handleRsRecompute() {
     setRsRecomputing(true);
     setRsError(null);
-    setRecomputeStatus("running");
+    setRsRecomputeStatus("running");
     try {
       const r = await recomputeLeagueRatings();
       setRsRatings(new Map(r.map((x) => [x.member_id, x.rating])));
       const lin = await getLeagueLineage();
       setRsLineageMembers(lin.members);
-      setRecomputeStatus("success");
-      setTimeout(() => setRecomputeStatus("idle"), 3000);
+      setRsRecomputeStatus("success");
+      setTimeout(() => setRsRecomputeStatus("idle"), 3000);
     } catch (e) {
       setRsError(String(e));
-      setRecomputeStatus("error");
+      setRsRecomputeStatus("error");
     } finally {
       setRsRecomputing(false);
     }
@@ -567,17 +568,17 @@ export default function LeaguePage() {
   async function handleHhRecompute() {
     setHhRecomputing(true);
     setHhError(null);
-    setRecomputeStatus("running");
+    setHhRecomputeStatus("running");
     try {
       const r = await recomputeCompetitiveLeagueRatings();
       setHhRatings(new Map(r.map((x) => [x.member_id, x.rating])));
       const evo = await getCompetitiveLeagueEvolution();
       setHhEvolutionData(evo);
-      setRecomputeStatus("success");
-      setTimeout(() => setRecomputeStatus("idle"), 3000);
+      setHhRecomputeStatus("success");
+      setTimeout(() => setHhRecomputeStatus("idle"), 3000);
     } catch (e) {
       setHhError(String(e));
-      setRecomputeStatus("error");
+      setHhRecomputeStatus("error");
     } finally {
       setHhRecomputing(false);
     }
@@ -794,13 +795,13 @@ export default function LeaguePage() {
           >
             {recomputing ? "Recomputing..." : "Recompute Ratings"}
           </button>
-          {recomputeStatus === "running" && (
+          {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "running" && (
             <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Recomputing...</span>
           )}
-          {recomputeStatus === "success" && (
+          {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "success" && (
             <span style={{ fontSize: 12, color: "var(--accent)" }}>&#10003; Ratings updated</span>
           )}
-          {recomputeStatus === "error" && (
+          {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "error" && (
             <span style={{ fontSize: 12, color: "#f87171" }}>Failed to recompute</span>
           )}
         </div>
@@ -990,28 +991,34 @@ export default function LeaguePage() {
               {tab === "lineage" && (
                 <div>
                   <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Lineage Graph</h3>
-                  <div style={{ position: "relative" }}>
-                    <CompLineageSVG
-                      members={hhEvolutionData.members}
-                      onSelect={setHhSelectedEvolution}
-                      selectedId={hhSelectedEvolution?.member_id ?? null}
-                    />
+                  <div style={{ display: "flex", flexDirection: "row", transition: "all 200ms" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <CompLineageSVG
+                        members={hhEvolutionData.members}
+                        onSelect={setHhSelectedEvolution}
+                        selectedId={hhSelectedEvolution?.member_id ?? null}
+                      />
+                    </div>
 
                     {hhSelectedEvolution && (
                       <div style={{
-                        position: "absolute",
-                        top: 12,
-                        right: 12,
                         width: 220,
+                        flexShrink: 0,
                         background: "var(--bg-elevated)",
-                        border: "1px solid var(--bg-border)",
-                        borderRadius: 8,
+                        borderLeft: "1px solid var(--bg-border)",
                         padding: 16,
-                        zIndex: 10,
                         fontSize: 13,
                         color: "var(--text-primary)",
                       }}>
-                        <h4 style={{ fontWeight: 700, marginBottom: 8 }}>Details</h4>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <h4 style={{ fontWeight: 700, margin: 0 }}>Details</h4>
+                          <button
+                            onClick={() => setHhSelectedEvolution(null)}
+                            style={{ fontSize: 16, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+                          >
+                            &times;
+                          </button>
+                        </div>
                         <dl style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Member ID</dt>
                           <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -1055,12 +1062,6 @@ export default function LeaguePage() {
                               : "—"}
                           </dd>
                         </dl>
-                        <button
-                          onClick={() => setHhSelectedEvolution(null)}
-                          style={{ marginTop: 8, fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                        >
-                          Close
-                        </button>
                       </div>
                     )}
                   </div>
@@ -1316,28 +1317,34 @@ export default function LeaguePage() {
                         history.
                       </p>
                     ) : (
-                      <div style={{ position: "relative" }}>
-                        <CompLineageSVG
-                          members={hhEvolutionData.members}
-                          onSelect={setHhSelectedEvolution}
-                          selectedId={hhSelectedEvolution?.member_id ?? null}
-                        />
+                      <div style={{ display: "flex", flexDirection: "row", transition: "all 200ms" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <CompLineageSVG
+                            members={hhEvolutionData.members}
+                            onSelect={setHhSelectedEvolution}
+                            selectedId={hhSelectedEvolution?.member_id ?? null}
+                          />
+                        </div>
 
                         {hhSelectedEvolution && (
                           <div style={{
-                            position: "absolute",
-                            top: 12,
-                            right: 12,
                             width: 220,
+                            flexShrink: 0,
                             background: "var(--bg-elevated)",
-                            border: "1px solid var(--bg-border)",
-                            borderRadius: 8,
+                            borderLeft: "1px solid var(--bg-border)",
                             padding: 16,
-                            zIndex: 10,
                             fontSize: 13,
                             color: "var(--text-primary)",
                           }}>
-                            <h4 style={{ fontWeight: 700, marginBottom: 8 }}>Details</h4>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <h4 style={{ fontWeight: 700, margin: 0 }}>Details</h4>
+                              <button
+                                onClick={() => setHhSelectedEvolution(null)}
+                                style={{ fontSize: 16, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1 }}
+                              >
+                                &times;
+                              </button>
+                            </div>
                             <dl style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               <dt style={{ color: "var(--text-secondary)", fontSize: 12 }}>Member ID</dt>
                               <dd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -1385,12 +1392,6 @@ export default function LeaguePage() {
                                 {hhSelectedEvolution.notes ?? "—"}
                               </dd>
                             </dl>
-                            <button
-                              onClick={() => setHhSelectedEvolution(null)}
-                              style={{ marginTop: 8, fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                            >
-                              Close
-                            </button>
                           </div>
                         )}
                       </div>
