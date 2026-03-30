@@ -197,9 +197,10 @@ export default function LineageGraph({ nodes: inputNodes, emptyMessage }: Lineag
         </div>
       )}
 
-      {/* SVG + overlay container */}
-      <div style={{ position: "relative" }}>
-        <div style={{ overflowX: "auto" }}>
+      {/* SVG + sidebar layout */}
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        {/* Left: scrollable SVG */}
+        <div style={{ flex: 1, minWidth: 0, overflowX: "auto" }}>
           <svg width={svgW} height={svgH} style={{ display: "block" }}>
             {/* Connectors */}
             {edges.map((e, i) => {
@@ -285,70 +286,104 @@ export default function LineageGraph({ nodes: inputNodes, emptyMessage }: Lineag
           </svg>
         </div>
 
-        {/* Detail panel overlay */}
-        {selectedNode && (
-          <div
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              width: 200,
-              background: "#111111",
-              border: "1px solid #2a2a2a",
-              borderRadius: 8,
-              padding: 16,
-              zIndex: 10,
-              fontSize: 13,
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#888888" }}>Details</span>
-              <button
-                onClick={() => setSelectedNode(null)}
+        {/* Right: detail panel — always rendered, 220px wide */}
+        <div style={{ width: 220, flexShrink: 0, position: "sticky", top: 80 }}>
+          {selectedNode ? (
+            <div
+              style={{
+                width: 220,
+                background: "#111111",
+                border: "1px solid #2a2a2a",
+                borderRadius: 8,
+                padding: 16,
+                fontSize: 13,
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "#888888" }}>Details</span>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#666666",
+                    cursor: "pointer",
+                    fontSize: 16,
+                    lineHeight: 1,
+                    padding: 0,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#ededed"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#666666"; }}
+                >
+                  &times;
+                </button>
+              </div>
+              {/* Divider */}
+              <div style={{ borderTop: "1px solid #1e1e1e", margin: "8px 0" }} />
+              {/* Rows */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <DetailRow label="Member ID" value={selectedNode.id} mono />
+                <DetailRow label="Rating" value={Math.round(selectedNode.rating).toString()} />
+                <DetailRow label="Parent" value={selectedNode.parent_id ?? "—"} mono />
+                {(selectedNode.cluster != null || selectedNode.robustness != null) && (
+                  <>
+                    <DetailRow label="Cluster" value={selectedNode.cluster != null ? String(selectedNode.cluster) : "—"} />
+                    <DetailRow
+                      label="Robustness"
+                      value={selectedNode.robustness != null ? selectedNode.robustness.toFixed(3) : "—"}
+                    />
+                  </>
+                )}
+                <DetailRow
+                  label="Created"
+                  value={
+                    selectedNode.created_at
+                      ? new Date(selectedNode.created_at).toLocaleString()
+                      : "—"
+                  }
+                />
+                <DetailRow label="Notes" value={selectedNode.notes ?? "—"} />
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "#111111",
+                border: "1px solid #1e1e1e",
+                borderRadius: 8,
+                padding: "24px 16px",
+                textAlign: "center",
+              }}
+            >
+              <div
                 style={{
-                  background: "none",
-                  border: "none",
-                  color: "#666666",
-                  cursor: "pointer",
-                  fontSize: 16,
-                  lineHeight: 1,
-                  padding: 0,
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  background: "#1a1a1a",
+                  border: "1px solid #2a2a2a",
+                  margin: "0 auto 10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "#ededed"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "#666666"; }}
               >
-                &times;
-              </button>
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "#333333",
+                  }}
+                />
+              </div>
+              <p style={{ fontSize: 12, color: "#555555", lineHeight: 1.5, margin: 0 }}>
+                Click a node to inspect
+              </p>
             </div>
-            {/* Divider */}
-            <div style={{ borderTop: "1px solid #1e1e1e", margin: "8px 0" }} />
-            {/* Rows */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <DetailRow label="Member ID" value={selectedNode.id} mono />
-              <DetailRow label="Rating" value={Math.round(selectedNode.rating).toString()} />
-              <DetailRow label="Parent" value={selectedNode.parent_id ?? "—"} mono />
-              {(selectedNode.cluster != null || selectedNode.robustness != null) && (
-                <>
-                  <DetailRow label="Cluster" value={selectedNode.cluster != null ? String(selectedNode.cluster) : "—"} />
-                  <DetailRow
-                    label="Robustness"
-                    value={selectedNode.robustness != null ? selectedNode.robustness.toFixed(3) : "—"}
-                  />
-                </>
-              )}
-              <DetailRow
-                label="Created"
-                value={
-                  selectedNode.created_at
-                    ? new Date(selectedNode.created_at).toLocaleString()
-                    : "—"
-                }
-              />
-              <DetailRow label="Notes" value={selectedNode.notes ?? "—"} />
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

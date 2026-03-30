@@ -20,7 +20,7 @@ function labelColor(label: string): string {
   return LABEL_COLOR[label] ?? "#9ca3af";
 }
 
-function TimelineEntry({
+function ChampionHistoryCard({
   entry,
   idx,
 }: {
@@ -28,45 +28,75 @@ function TimelineEntry({
   idx: number;
 }) {
   return (
-    <li className="border border-gray-200 rounded p-2 text-xs">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-gray-400 font-mono">#{idx + 1}</span>
+    <div
+      style={{
+        flexShrink: 0,
+        width: 180,
+        background: "#111111",
+        border: "1px solid #1e1e1e",
+        borderRadius: 8,
+        padding: 14,
+        borderTop: `2px solid ${labelColor(entry.label)}`,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 8,
+        }}
+      >
         <span
-          className="font-medium"
-          style={{ color: labelColor(entry.label) }}
+          style={{ fontSize: 11, color: "#555555", fontFamily: "monospace" }}
+        >
+          #{idx + 1}
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: labelColor(entry.label),
+          }}
         >
           {entry.label}
         </span>
-        {entry.cluster_id != null && (
-          <span className="text-gray-400">cluster {entry.cluster_id}</span>
-        )}
       </div>
       <div
-        className="font-mono text-gray-700 mb-1 truncate"
+        style={{
+          fontSize: 11,
+          color: "#888888",
+          fontFamily: "monospace",
+          marginBottom: 6,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
         title={entry.member_id}
       >
         {entry.member_id}
       </div>
-      <div className="flex gap-3 text-gray-600">
-        <span>
-          Rating:{" "}
-          <span className="font-medium">{entry.rating.toFixed(1)}</span>
-        </span>
-        {entry.robustness_score != null && (
-          <span>
-            Robust:{" "}
-            <span className="font-medium">
-              {entry.robustness_score.toFixed(3)}
-            </span>
-          </span>
-        )}
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#ededed",
+          marginBottom: 4,
+        }}
+      >
+        {entry.rating.toFixed(1)}
       </div>
-      {entry.created_at && (
-        <div className="text-gray-400 mt-1">
-          {new Date(entry.created_at).toLocaleString()}
+      {entry.robustness_score != null && (
+        <div style={{ fontSize: 11, color: "#666666" }}>
+          Robust: {entry.robustness_score.toFixed(3)}
         </div>
       )}
-    </li>
+      {entry.created_at && (
+        <div style={{ fontSize: 10, color: "#444444", marginTop: 6 }}>
+          {new Date(entry.created_at).toLocaleDateString()}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -75,7 +105,7 @@ export default function LeagueEvolution({ data }: Props) {
 
   if (members.length === 0 && champion_history.length === 0) {
     return (
-      <p className="text-gray-500">
+      <p style={{ color: "#666666", fontSize: 13 }}>
         No evolution data yet. Train and save snapshots to build history.
       </p>
     );
@@ -93,27 +123,47 @@ export default function LeagueEvolution({ data }: Props) {
   }));
 
   return (
-    <div className="flex gap-6">
-      {/* Left: Lineage graph */}
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold mb-2">Lineage Graph</h3>
-        <LineageGraph
-          nodes={nodes}
-          emptyMessage="No members to display."
-        />
+    <div>
+      {/* Top: LineageGraph — full width, has its own built-in sidebar */}
+      <div style={{ marginBottom: 32 }}>
+        <LineageGraph nodes={nodes} emptyMessage="No members to display." />
       </div>
 
-      {/* Right: Champion history timeline */}
-      <div className="w-72 flex-shrink-0">
-        <h3 className="text-sm font-semibold mb-2">Champion History</h3>
+      {/* Bottom: Champion History — full width horizontal scroll */}
+      <div>
+        <h3
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            color: "#888888",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            marginBottom: 16,
+          }}
+        >
+          Champion History
+        </h3>
         {champion_history.length === 0 ? (
-          <p className="text-gray-500 text-sm">No champion history yet.</p>
+          <p style={{ color: "#666666", fontSize: 13 }}>
+            No champion history yet.
+          </p>
         ) : (
-          <ol className="space-y-2">
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              overflowX: "auto",
+              paddingBottom: 8,
+            }}
+          >
             {champion_history.map((entry, idx) => (
-              <TimelineEntry key={entry.member_id} entry={entry} idx={idx} />
+              <ChampionHistoryCard
+                key={entry.member_id}
+                entry={entry}
+                idx={idx}
+              />
             ))}
-          </ol>
+          </div>
         )}
       </div>
     </div>
