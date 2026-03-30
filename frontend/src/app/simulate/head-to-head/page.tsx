@@ -8,6 +8,7 @@ import {
   createCompetitiveConfig,
   startCompetitiveRun,
   listRuns,
+  getRunDetail,
   RunListItem,
   CompetitiveAgentPolicy,
 } from "@/lib/api";
@@ -20,13 +21,28 @@ const COMPETITIVE_POLICIES: CompetitiveAgentPolicy[] = [
   "competitive_ppo",
 ];
 
-const COMPETITIVE_POLICY_SET = new Set<string>([
-  "random",
+/** Policies that are unambiguously Competitive — never appear in Resource Sharing */
+const DEFINITE_COMPETITIVE_POLICIES = new Set<string>([
   "always_attack",
   "always_build",
   "always_defend",
   "competitive_ppo",
 ]);
+
+/** Returns 'mixed' | 'competitive' | 'unknown' by inspecting episode_summary */
+async function resolveRunArchetype(
+  runId: string,
+): Promise<"mixed" | "competitive" | "unknown"> {
+  try {
+    const detail = await getRunDetail(runId);
+    if (!detail.episode_summary) return "unknown";
+    if ("winner_id" in detail.episode_summary) return "competitive";
+    if ("final_shared_pool" in detail.episode_summary) return "mixed";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 /* ── shared inline styles ── */
 
@@ -108,16 +124,40 @@ function HeadToHeadInner() {
     setRunsLoading(true);
     try {
       const all = await listRuns();
-      /* Show runs whose policy is competitive, or null/empty (legacy) */
-      setRuns(
-        all.filter(
-          (r) =>
-            (r.agent_policy != null &&
-              COMPETITIVE_POLICY_SET.has(r.agent_policy)) ||
-            r.agent_policy === null ||
-            r.agent_policy === "",
-        ),
+
+      const definite: RunListItem[] = [];
+      const ambiguous: RunListItem[] = [];
+
+      for (const r of all) {
+        if (r.agent_policy && DEFINITE_COMPETITIVE_POLICIES.has(r.agent_policy)) {
+          definite.push(r);
+        } else if (
+          r.agent_policy === "random" ||
+          r.agent_policy === null ||
+          r.agent_policy === ""
+        ) {
+          ambiguous.push(r);
+        }
+        // mixed-only policies are skipped entirely
+      }
+
+      // Resolve up to 20 ambiguous runs via detail endpoint
+      const toResolve = ambiguous.slice(0, 20);
+      const overflow = ambiguous.slice(20);
+
+      const resolved = await Promise.all(
+        toResolve.map(async (r) => {
+          const archetype = await resolveRunArchetype(r.run_id);
+          return { run: r, archetype };
+        }),
       );
+
+      const competitiveFromAmbiguous = resolved
+        .filter((x) => x.archetype === "competitive" || x.archetype === "unknown")
+        .map((x) => x.run);
+
+      // Overflow ambiguous runs (beyond 20) default to Head-to-Head
+      setRuns([...definite, ...competitiveFromAmbiguous, ...overflow]);
     } catch {
       /* silently ignore */
     } finally {

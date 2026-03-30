@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 
 import {
   listRuns,
+  getRunDetail,
   startRun,
   RunListItem,
   AgentPolicy,
@@ -22,14 +23,29 @@ const MIXED_POLICIES: AgentPolicy[] = [
   "league_snapshot",
 ];
 
-const MIXED_POLICY_SET = new Set([
-  "random",
+/** Policies that are unambiguously Mixed — never appear in Head-to-Head */
+const DEFINITE_MIXED_POLICIES = new Set([
   "always_cooperate",
   "always_extract",
   "tit_for_tat",
   "ppo_shared",
   "league_snapshot",
 ]);
+
+/** Returns 'mixed' | 'competitive' | 'unknown' by inspecting episode_summary */
+async function resolveRunArchetype(
+  runId: string,
+): Promise<"mixed" | "competitive" | "unknown"> {
+  try {
+    const detail = await getRunDetail(runId);
+    if (!detail.episode_summary) return "unknown";
+    if ("winner_id" in detail.episode_summary) return "competitive";
+    if ("final_shared_pool" in detail.episode_summary) return "mixed";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 /* ── shared inline styles ── */
 
@@ -106,11 +122,37 @@ function ResourceSharingInner() {
     setRunsLoading(true);
     try {
       const all = await listRuns();
-      setRuns(
-        all.filter(
-          (r) => r.agent_policy != null && MIXED_POLICY_SET.has(r.agent_policy),
-        ),
+
+      const definite: RunListItem[] = [];
+      const ambiguous: RunListItem[] = [];
+
+      for (const r of all) {
+        if (r.agent_policy && DEFINITE_MIXED_POLICIES.has(r.agent_policy)) {
+          definite.push(r);
+        } else if (
+          r.agent_policy === "random" ||
+          r.agent_policy === null ||
+          r.agent_policy === ""
+        ) {
+          ambiguous.push(r);
+        }
+        // competitive-only policies are skipped entirely
+      }
+
+      // Resolve up to 20 ambiguous runs via detail endpoint
+      const toResolve = ambiguous.slice(0, 20);
+      const resolved = await Promise.all(
+        toResolve.map(async (r) => {
+          const archetype = await resolveRunArchetype(r.run_id);
+          return { run: r, archetype };
+        }),
       );
+
+      const mixedFromAmbiguous = resolved
+        .filter((x) => x.archetype === "mixed")
+        .map((x) => x.run);
+
+      setRuns([...definite, ...mixedFromAmbiguous]);
     } catch {
       /* silently ignore — empty table is fine */
     } finally {
