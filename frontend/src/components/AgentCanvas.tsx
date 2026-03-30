@@ -17,6 +17,10 @@ interface Agent {
   label: string;
 }
 
+interface AgentCanvasProps {
+  obstacleZones?: DOMRect[];
+}
+
 const LABELS: [string, string][] = [
   ["Cooperative", "#22c55e"],
   ["Aggressive", "#ef4444"],
@@ -26,6 +30,9 @@ const LABELS: [string, string][] = [
 ];
 
 const CONNECTION_DIST = 120;
+const REPULSION_RANGE = 60;
+const REPULSION_STRENGTH = 0.8;
+const MAX_SPEED = 0.5;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,15 +42,48 @@ function rand(min: number, max: number) {
   return Math.random() * (max - min) + min;
 }
 
-function createAgents(w: number, h: number): Agent[] {
+function clamp(val: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, val));
+}
+
+function isInsideAnyZone(x: number, y: number, zones: DOMRect[]): boolean {
+  for (const z of zones) {
+    if (x >= z.left && x <= z.right && y >= z.top && y <= z.bottom) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function createAgents(w: number, h: number, zones: DOMRect[]): Agent[] {
   const agents: Agent[] = [];
   const pad = 20;
+  const corners = [
+    { x: pad, y: pad },
+    { x: w - pad, y: pad },
+    { x: pad, y: h - pad },
+    { x: w - pad, y: h - pad },
+  ];
+
+  function safePosition(): { x: number; y: number } {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const x = rand(pad, w - pad);
+      const y = rand(pad, h - pad);
+      if (!isInsideAnyZone(x, y, zones)) {
+        return { x, y };
+      }
+    }
+    // Fallback: pick a corner
+    const c = corners[Math.floor(Math.random() * corners.length)];
+    return { x: c.x, y: c.y };
+  }
 
   // Champion
+  const champPos = safePosition();
   agents.push({
     id: 0,
-    x: rand(pad, w - pad),
-    y: rand(pad, h - pad),
+    x: champPos.x,
+    y: champPos.y,
     vx: rand(-0.25, 0.25),
     vy: rand(-0.25, 0.25),
     radius: 7,
@@ -54,10 +94,11 @@ function createAgents(w: number, h: number): Agent[] {
   // Other agents
   for (let i = 1; i < 16; i++) {
     const [label, color] = LABELS[Math.floor(Math.random() * LABELS.length)];
+    const pos = safePosition();
     agents.push({
       id: i,
-      x: rand(pad, w - pad),
-      y: rand(pad, h - pad),
+      x: pos.x,
+      y: pos.y,
       vx: rand(-0.25, 0.25),
       vy: rand(-0.25, 0.25),
       radius: Math.floor(rand(3, 7)),
@@ -80,10 +121,16 @@ function hexToRgba(hex: string, alpha: number): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function AgentCanvas() {
+export default function AgentCanvas({ obstacleZones }: AgentCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const agentsRef = useRef<Agent[]>([]);
   const rafRef = useRef<number>(0);
+  const zonesRef = useRef<DOMRect[]>([]);
+
+  // Keep zones ref in sync with prop
+  useEffect(() => {
+    zonesRef.current = obstacleZones ?? [];
+  }, [obstacleZones]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -100,7 +147,7 @@ export default function AgentCanvas() {
     resize();
 
     // Create agents sized to current viewport
-    agentsRef.current = createAgents(canvas.width, canvas.height);
+    agentsRef.current = createAgents(canvas.width, canvas.height, zonesRef.current);
 
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
@@ -149,11 +196,36 @@ export default function AgentCanvas() {
       const agents = agentsRef.current;
       const w = canvas.width;
       const h = canvas.height;
+      const zones = zonesRef.current;
 
       for (const agent of agents) {
         agent.x += agent.vx;
         agent.y += agent.vy;
 
+        // Obstacle repulsion
+        for (const zone of zones) {
+          const clampedX = clamp(agent.x, zone.left, zone.right);
+          const clampedY = clamp(agent.y, zone.top, zone.bottom);
+          const dx = agent.x - clampedX;
+          const dy = agent.y - clampedY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < REPULSION_RANGE) {
+            const len = dist || 1;
+            const force = (REPULSION_RANGE - dist) / REPULSION_RANGE * REPULSION_STRENGTH;
+            agent.vx += (dx / len) * force * 0.05;
+            agent.vy += (dy / len) * force * 0.05;
+          }
+        }
+
+        // Clamp velocity to max speed
+        const speed = Math.sqrt(agent.vx * agent.vx + agent.vy * agent.vy);
+        if (speed > MAX_SPEED) {
+          agent.vx = (agent.vx / speed) * MAX_SPEED;
+          agent.vy = (agent.vy / speed) * MAX_SPEED;
+        }
+
+        // Wall bounce
         if (agent.x - agent.radius < 0 || agent.x + agent.radius > w) {
           agent.vx = -agent.vx;
           agent.x = Math.max(agent.radius, Math.min(w - agent.radius, agent.x));

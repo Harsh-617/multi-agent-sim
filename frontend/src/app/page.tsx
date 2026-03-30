@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import Link from "next/link";
 import AgentCanvas from "@/components/AgentCanvas";
 
@@ -178,12 +178,39 @@ function QuickStartButton({ href, label }: { href: string; label: string }) {
 export default function HomePage() {
   const stats = useHomeStats();
 
+  const heroRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const quickstartRef = useRef<HTMLDivElement>(null);
+  const [obstacleZones, setObstacleZones] = useState<DOMRect[]>([]);
+
+  useLayoutEffect(() => {
+    function updateZones() {
+      const zones: DOMRect[] = [];
+      const addZone = (el: HTMLElement | null) => {
+        if (!el) return;
+        zones.push(
+          new DOMRect(el.offsetLeft, el.offsetTop, el.offsetWidth, el.offsetHeight)
+        );
+      };
+      addZone(heroRef.current);
+      addZone(statsRef.current);
+      addZone(featuresRef.current);
+      addZone(quickstartRef.current);
+      setObstacleZones(zones);
+    }
+    updateZones();
+    window.addEventListener("resize", updateZones);
+    return () => window.removeEventListener("resize", updateZones);
+  }, []);
+
   return (
     <div style={{ position: "relative", overflow: "hidden", minHeight: "100vh" }}>
-      <AgentCanvas />
+      <AgentCanvas obstacleZones={obstacleZones} />
       <main style={{ paddingTop: 48 /* account for fixed nav */ }}>
         {/* ── Hero ── */}
         <section
+          ref={heroRef}
           style={{
             padding: "80px 24px",
             textAlign: "center",
@@ -243,6 +270,7 @@ export default function HomePage() {
 
         {/* ── Stats Bar ── */}
         <section
+          ref={statsRef}
           style={{
             background: "var(--bg-surface)",
             borderTop: "1px solid var(--bg-border)",
@@ -294,6 +322,7 @@ export default function HomePage() {
 
       {/* ── Feature Highlights ── */}
       <section
+        ref={featuresRef}
         style={{
           padding: "60px 24px",
           maxWidth: 960,
@@ -352,6 +381,7 @@ export default function HomePage() {
 
       {/* ── Quick Start ── */}
       <section
+        ref={quickstartRef}
         style={{
           padding: "40px 24px",
           maxWidth: 680,
