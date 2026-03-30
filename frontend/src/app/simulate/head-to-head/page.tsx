@@ -179,6 +179,28 @@ function HeadToHeadInner() {
         num_agents: numAgents,
         max_steps: maxSteps,
         seed,
+        ...(advanced
+          ? {
+              initial_score: initialScore,
+              initial_resources: initialResources,
+              resource_regeneration_rate: resourceRegenerationRate,
+              elimination_threshold: eliminationThreshold,
+              dominance_margin: dominanceMargin,
+              information_asymmetry: informationAsymmetry,
+              opponent_history_depth: opponentHistoryDepth,
+              opponent_obs_window: opponentObsWindow,
+              history_sensitivity: historySensitivity,
+              incentive_softness: incentiveSoftness,
+              uncertainty_intensity: uncertaintyIntensity,
+              gamble_variance: gambleVariance,
+              absolute_gain_weight: absoluteGainWeight,
+              relative_gain_weight: relativeGainWeight,
+              efficiency_weight: efficiencyWeight,
+              terminal_bonus_scale: terminalBonusScale,
+              penalty_scaling: penaltyScaling,
+              observation_memory_steps: observationMemorySteps,
+            }
+          : {}),
       });
       const { run_id } = await startCompetitiveRun(config_id, agentPolicy);
       router.push(`/simulate/head-to-head/run/${run_id}`);

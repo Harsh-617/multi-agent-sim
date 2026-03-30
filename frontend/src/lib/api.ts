@@ -459,11 +459,35 @@ export type CompetitiveAgentPolicy =
   | "always_defend"
   | "competitive_ppo";
 
-export function createCompetitiveConfig(config: {
+export interface CompetitiveConfigParams {
   num_agents: number;
   max_steps: number;
   seed: number;
-}): Promise<{ config_id: string }> {
+  /* population */
+  initial_score?: number;
+  initial_resources?: number;
+  resource_regeneration_rate?: number;
+  elimination_threshold?: number;
+  dominance_margin?: number;
+  /* layers */
+  information_asymmetry?: number;
+  opponent_history_depth?: number;
+  opponent_obs_window?: number;
+  history_sensitivity?: number;
+  incentive_softness?: number;
+  uncertainty_intensity?: number;
+  gamble_variance?: number;
+  /* rewards */
+  absolute_gain_weight?: number;
+  relative_gain_weight?: number;
+  efficiency_weight?: number;
+  terminal_bonus_scale?: number;
+  penalty_scaling?: number;
+  /* agents */
+  observation_memory_steps?: number;
+}
+
+export function createCompetitiveConfig(config: CompetitiveConfigParams): Promise<{ config_id: string }> {
   return json(`${BASE}/configs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -476,30 +500,30 @@ export function createCompetitiveConfig(config: {
       population: {
         num_agents: config.num_agents,
         max_steps: config.max_steps,
-        initial_score: 0.0,
-        initial_resources: 20.0,
-        resource_regeneration_rate: 1.0,
-        elimination_threshold: 0.0,
-        dominance_margin: 0.0,
+        initial_score: config.initial_score ?? 0.0,
+        initial_resources: config.initial_resources ?? 20.0,
+        resource_regeneration_rate: config.resource_regeneration_rate ?? 1.0,
+        elimination_threshold: config.elimination_threshold ?? 0.0,
+        dominance_margin: config.dominance_margin ?? 0.0,
       },
       layers: {
-        information_asymmetry: 0.3,
-        opponent_history_depth: 10,
-        opponent_obs_window: 5,
-        history_sensitivity: 0.5,
-        incentive_softness: 0.8,
-        uncertainty_intensity: 0.1,
-        gamble_variance: 0.5,
+        information_asymmetry: config.information_asymmetry ?? 0.3,
+        opponent_history_depth: config.opponent_history_depth ?? 10,
+        opponent_obs_window: config.opponent_obs_window ?? 5,
+        history_sensitivity: config.history_sensitivity ?? 0.5,
+        incentive_softness: config.incentive_softness ?? 0.8,
+        uncertainty_intensity: config.uncertainty_intensity ?? 0.1,
+        gamble_variance: config.gamble_variance ?? 0.5,
       },
       rewards: {
-        absolute_gain_weight: 1.0,
-        relative_gain_weight: 0.5,
-        efficiency_weight: 0.3,
-        terminal_bonus_scale: 2.0,
-        penalty_scaling: 1.0,
+        absolute_gain_weight: config.absolute_gain_weight ?? 1.0,
+        relative_gain_weight: config.relative_gain_weight ?? 0.5,
+        efficiency_weight: config.efficiency_weight ?? 0.3,
+        terminal_bonus_scale: config.terminal_bonus_scale ?? 2.0,
+        penalty_scaling: config.penalty_scaling ?? 1.0,
       },
       agents: {
-        observation_memory_steps: 5,
+        observation_memory_steps: config.observation_memory_steps ?? 5,
       },
       instrumentation: {
         enable_step_metrics: true,
