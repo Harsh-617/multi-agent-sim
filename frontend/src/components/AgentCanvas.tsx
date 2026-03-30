@@ -110,13 +110,6 @@ function createAgents(w: number, h: number, zones: DOMRect[]): Agent[] {
   return agents;
 }
 
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -181,12 +174,38 @@ export default function AgentCanvas({ obstacleZones }: AgentCanvasProps) {
         }
       }
 
-      // Agents — simple filled circles only
+      // Agents — styled with labels
       for (const agent of agents) {
+        const isChampion = agent.id === 0;
+
+        // Outer ring (champion only)
+        if (isChampion) {
+          ctx.beginPath();
+          ctx.arc(agent.x, agent.y, agent.radius + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = agent.color + "40";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // Main circle
         ctx.beginPath();
         ctx.arc(agent.x, agent.y, agent.radius, 0, Math.PI * 2);
-        ctx.fillStyle = hexToRgba(agent.color, 0.4);
+        ctx.fillStyle = agent.color + "66";
         ctx.fill();
+
+        // Strategy label
+        ctx.font = "bold 8px 'JetBrains Mono', monospace";
+        ctx.fillStyle = agent.color + "99";
+        ctx.textAlign = "center";
+        ctx.fillText(agent.label, agent.x, agent.y - agent.radius - 4);
+
+        // Champion star
+        if (isChampion) {
+          ctx.font = "7px sans-serif";
+          ctx.fillStyle = "#f59e0b99";
+          ctx.textAlign = "center";
+          ctx.fillText("★", agent.x, agent.y - agent.radius - 13);
+        }
       }
     }
 

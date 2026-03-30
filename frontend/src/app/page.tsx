@@ -223,11 +223,12 @@ export default function HomePage() {
           {/* Eyebrow */}
           <div
             style={{
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: "0.06em",
               color: "var(--accent)",
-              marginBottom: 16,
+              textTransform: "uppercase" as const,
+              marginBottom: 20,
             }}
           >
             Multi-Agent Simulation Platform
@@ -315,6 +316,126 @@ export default function HomePage() {
               >
                 {s.label}
               </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── How It Works ── */}
+      <section style={{
+        padding: "60px 24px",
+        maxWidth: 960,
+        margin: "0 auto",
+        position: "relative",
+        zIndex: 1,
+      }}>
+        <p style={{
+          fontSize: 11,
+          fontWeight: 500,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: "var(--accent)",
+          marginBottom: 12,
+          textAlign: "center",
+        }}>How it works</p>
+
+        <h2 style={{
+          fontSize: 28,
+          fontWeight: 500,
+          color: "var(--text-primary)",
+          textAlign: "center",
+          marginBottom: 48,
+          lineHeight: 1.2,
+        }}>
+          From configuration to research-grade results
+        </h2>
+
+        <div className="steps-grid" style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 24,
+          position: "relative",
+        }}>
+          <div style={{
+            position: "absolute",
+            top: 20,
+            left: "12.5%",
+            right: "12.5%",
+            height: 1,
+            background:
+              "linear-gradient(to right, transparent, var(--bg-border) 20%, var(--bg-border) 80%, transparent)",
+            zIndex: 0,
+          }} />
+
+          {[
+            {
+              step: "01",
+              title: "Choose a template",
+              description:
+                "Pick an environment — Resource Sharing or Head-to-Head. Configure agents, episode length, and behavioral parameters.",
+            },
+            {
+              step: "02",
+              title: "Train with self-play",
+              description:
+                "PPO agents train against a league of past snapshots. Policies evolve across generations with Elo-based ranking.",
+            },
+            {
+              step: "03",
+              title: "League evolves",
+              description:
+                "Periodic snapshots enter the league. A lineage tree builds — parent policies give rise to children with different strategies.",
+            },
+            {
+              step: "04",
+              title: "Analyze results",
+              description:
+                "Robustness sweeps stress-test the champion. Strategy clustering discovers emergent playstyles automatically.",
+            },
+          ].map((item) => (
+            <div
+              key={item.step}
+              style={{
+                position: "relative",
+                zIndex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+              }}
+            >
+              <div style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--bg-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 16,
+                fontSize: 12,
+                fontWeight: 500,
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+              }}>
+                {item.step}
+              </div>
+              <h3 style={{
+                fontSize: 14,
+                fontWeight: 500,
+                color: "var(--text-primary)",
+                marginBottom: 8,
+              }}>
+                {item.title}
+              </h3>
+              <p style={{
+                fontSize: 13,
+                color: "var(--text-secondary)",
+                lineHeight: 1.6,
+              }}>
+                {item.description}
+              </p>
             </div>
           ))}
         </div>
