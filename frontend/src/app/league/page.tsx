@@ -130,55 +130,77 @@ function CompetitiveBarChart({
   );
 }
 
-// Competitive timeline entry
+// Competitive history card (inline styles, matches ChampionHistoryCard layout)
 
-function CompetitiveTimelineEntry({
+function CompetitiveHistoryCard({
   entry,
   idx,
 }: {
   entry: ChampionHistoryEntry;
   idx: number;
 }) {
+  const color = compLabelColor(entry.label);
   return (
-    <li className="border border-gray-200 rounded p-2 text-xs">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-gray-400 font-mono">#{idx + 1}</span>
-        <span
-          className="font-medium"
-          style={{ color: compLabelColor(entry.label) }}
-        >
-          {entry.label}
+    <div style={{
+      background: "#111111",
+      border: "1px solid #1e1e1e",
+      borderLeft: `3px solid ${color}`,
+      borderRadius: 6,
+      padding: "10px 12px",
+    }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 4,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "#555555",
+            fontFamily: "monospace" }}>
+            #{idx + 1}
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 500, color }}>
+            {entry.label}
+          </span>
+          {entry.cluster_id != null && (
+            <span style={{ fontSize: 11, color: "#444444" }}>
+              cluster {entry.cluster_id}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 600,
+          color: "#ededed" }}>
+          {entry.rating.toFixed(1)}
         </span>
-        {entry.cluster_id != null && (
-          <span className="text-gray-400">cluster {entry.cluster_id}</span>
-        )}
       </div>
-      <div
-        className="font-mono text-gray-700 mb-1 truncate"
-        title={entry.member_id}
-      >
+      <div style={{
+        fontSize: 11,
+        color: "#666666",
+        fontFamily: "monospace",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        marginBottom: 2,
+      }} title={entry.member_id}>
         {entry.member_id}
       </div>
-      <div className="flex gap-3 text-gray-600">
-        <span>
-          Rating:{" "}
-          <span className="font-medium">{entry.rating.toFixed(1)}</span>
-        </span>
-        {entry.robustness_score != null && (
-          <span>
-            Robust:{" "}
-            <span className="font-medium">
-              {entry.robustness_score.toFixed(3)}
-            </span>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        {entry.robustness_score != null ? (
+          <span style={{ fontSize: 11, color: "#555555" }}>
+            Robust: {entry.robustness_score.toFixed(3)}
+          </span>
+        ) : <span />}
+        {entry.created_at && (
+          <span style={{ fontSize: 10, color: "#444444" }}>
+            {new Date(entry.created_at).toLocaleDateString()}
           </span>
         )}
       </div>
-      {entry.created_at && (
-        <div className="text-gray-400 mt-1">
-          {new Date(entry.created_at).toLocaleString()}
-        </div>
-      )}
-    </li>
+    </div>
   );
 }
 
@@ -1005,9 +1027,9 @@ export default function LeaguePage() {
 
               {/* Evolution tab */}
               {tab === "evolution" && (
-                <div style={{ display: "flex", gap: 24 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Lineage Graph</h3>
+                <div>
+                  {/* LineageGraph full width on top */}
+                  <div style={{ marginBottom: 32 }}>
                     {hhEvolutionData.members.length === 0 &&
                     hhEvolutionData.champion_history.length === 0 ? (
                       <p style={{ color: "var(--text-tertiary)" }}>
@@ -1028,25 +1050,41 @@ export default function LeaguePage() {
                     )}
                   </div>
 
-                  {/* Champion history timeline */}
-                  <div style={{ width: 288, flexShrink: 0 }}>
-                    <h3 className="text-sm font-semibold mb-2">
+                  {/* Champion History scrollable list below */}
+                  <div>
+                    <h3 style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: "#888888",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      marginBottom: 16,
+                    }}>
                       Champion History
                     </h3>
-                    {hhEvolutionData.champion_history.length === 0 ? (
-                      <p className="text-gray-500 text-sm">
+                    {hhEvolutionData?.champion_history?.length === 0 ? (
+                      <p style={{ color: "#666666", fontSize: 13 }}>
                         No champion history yet.
                       </p>
                     ) : (
-                      <ol className="space-y-2">
-                        {hhEvolutionData.champion_history.map((entry, idx) => (
-                          <CompetitiveTimelineEntry
+                      <div style={{
+                        maxHeight: 400,
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                        paddingRight: 4,
+                        scrollbarWidth: "thin",
+                        scrollbarColor: "#2a2a2a transparent",
+                      }}>
+                        {hhEvolutionData?.champion_history?.map((entry, idx) => (
+                          <CompetitiveHistoryCard
                             key={entry.member_id}
                             entry={entry}
                             idx={idx}
                           />
                         ))}
-                      </ol>
+                      </div>
                     )}
                   </div>
                 </div>

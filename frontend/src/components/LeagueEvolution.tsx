@@ -27,75 +27,91 @@ function ChampionHistoryCard({
   entry: ChampionHistoryEntry;
   idx: number;
 }) {
+  const color = labelColor(entry.label);
   return (
     <div
       style={{
-        flexShrink: 0,
-        width: 180,
         background: "#111111",
         border: "1px solid #1e1e1e",
-        borderRadius: 8,
-        padding: 14,
-        borderTop: `2px solid ${labelColor(entry.label)}`,
+        borderLeft: `3px solid ${color}`,
+        borderRadius: 6,
+        padding: "10px 12px",
       }}
     >
+      {/* Top row: index + label + cluster on left, rating on right */}
       <div
         style={{
           display: "flex",
+          justifyContent: "space-between",
           alignItems: "center",
-          gap: 6,
-          marginBottom: 8,
+          marginBottom: 4,
         }}
       >
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: "#555555",
+              fontFamily: "monospace",
+            }}
+          >
+            #{idx + 1}
+          </span>
+          <span
+            style={{ fontSize: 12, fontWeight: 500, color }}
+          >
+            {entry.label}
+          </span>
+          {entry.cluster_id != null && (
+            <span style={{ fontSize: 11, color: "#444444" }}>
+              cluster {entry.cluster_id}
+            </span>
+          )}
+        </div>
         <span
-          style={{ fontSize: 11, color: "#555555", fontFamily: "monospace" }}
+          style={{ fontSize: 13, fontWeight: 600, color: "#ededed" }}
         >
-          #{idx + 1}
-        </span>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: labelColor(entry.label),
-          }}
-        >
-          {entry.label}
+          {entry.rating.toFixed(1)}
         </span>
       </div>
+
+      {/* Member ID */}
       <div
         style={{
           fontSize: 11,
-          color: "#888888",
+          color: "#666666",
           fontFamily: "monospace",
-          marginBottom: 6,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
+          marginBottom: 2,
         }}
         title={entry.member_id}
       >
         {entry.member_id}
       </div>
+
+      {/* Robustness + date row */}
       <div
         style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#ededed",
-          marginBottom: 4,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
-        {entry.rating.toFixed(1)}
+        {entry.robustness_score != null ? (
+          <span style={{ fontSize: 11, color: "#555555" }}>
+            Robust: {entry.robustness_score.toFixed(3)}
+          </span>
+        ) : (
+          <span />
+        )}
+        {entry.created_at && (
+          <span style={{ fontSize: 10, color: "#444444" }}>
+            {new Date(entry.created_at).toLocaleDateString()}
+          </span>
+        )}
       </div>
-      {entry.robustness_score != null && (
-        <div style={{ fontSize: 11, color: "#666666" }}>
-          Robust: {entry.robustness_score.toFixed(3)}
-        </div>
-      )}
-      {entry.created_at && (
-        <div style={{ fontSize: 10, color: "#444444", marginTop: 6 }}>
-          {new Date(entry.created_at).toLocaleDateString()}
-        </div>
-      )}
     </div>
   );
 }
@@ -129,7 +145,7 @@ export default function LeagueEvolution({ data }: Props) {
         <LineageGraph nodes={nodes} emptyMessage="No members to display." />
       </div>
 
-      {/* Bottom: Champion History — full width horizontal scroll */}
+      {/* Bottom: Champion History — vertical scrollable list */}
       <div>
         <h3
           style={{
@@ -150,10 +166,14 @@ export default function LeagueEvolution({ data }: Props) {
         ) : (
           <div
             style={{
+              maxHeight: 400,
+              overflowY: "auto",
               display: "flex",
-              gap: 12,
-              overflowX: "auto",
-              paddingBottom: 8,
+              flexDirection: "column",
+              gap: 8,
+              paddingRight: 4,
+              scrollbarWidth: "thin",
+              scrollbarColor: "#2a2a2a transparent",
             }}
           >
             {champion_history.map((entry, idx) => (
