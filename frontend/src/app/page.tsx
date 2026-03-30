@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import AgentCanvas from "@/components/AgentCanvas";
 
 // ---------------------------------------------------------------------------
 // Stats hook — fetches counts from multiple endpoints, non-blocking
@@ -180,65 +181,79 @@ export default function HomePage() {
   return (
     <main style={{ paddingTop: 48 /* account for fixed nav */ }}>
       {/* ── Hero ── */}
-      <section
-        style={{
-          padding: "80px 24px",
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ maxWidth: 680, textAlign: "center" }}>
-          {/* Eyebrow */}
-          <div
-            style={{
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "var(--accent)",
-              marginBottom: 16,
-            }}
-          >
-            Multi-Agent Simulation Platform
+      <section style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <div
+          className="hero-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: 48,
+            alignItems: "center",
+          }}
+        >
+          {/* Left: text */}
+          <div>
+            {/* Eyebrow */}
+            <div
+              style={{
+                fontSize: 11,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "var(--accent)",
+                marginBottom: 16,
+              }}
+            >
+              Multi-Agent Simulation Platform
+            </div>
+
+            {/* Headline */}
+            <h1
+              style={{
+                fontSize: 42,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                lineHeight: 1.15,
+                marginBottom: 16,
+                marginTop: 0,
+              }}
+            >
+              A research platform for emergent multi-agent strategy
+            </h1>
+
+            {/* Subheadline */}
+            <p
+              style={{
+                fontSize: 16,
+                color: "var(--text-secondary)",
+                lineHeight: 1.6,
+                marginBottom: 32,
+                marginTop: 0,
+              }}
+            >
+              Train agents, run leagues, and study how strategies emerge in
+              configurable multi-agent environments. Built for researchers.
+            </p>
+
+            {/* CTAs */}
+            <div style={{ display: "flex", gap: 12 }}>
+              <PrimaryCTA />
+              <SecondaryCTA />
+            </div>
           </div>
 
-          {/* Headline */}
-          <h1
-            style={{
-              fontSize: 42,
-              fontWeight: 600,
-              color: "var(--text-primary)",
-              lineHeight: 1.15,
-              marginBottom: 16,
-              marginTop: 0,
-            }}
-          >
-            A research platform for emergent multi-agent strategy
-          </h1>
-
-          {/* Subheadline */}
-          <p
-            style={{
-              fontSize: 16,
-              color: "var(--text-secondary)",
-              lineHeight: 1.6,
-              marginBottom: 32,
-              marginTop: 0,
-            }}
-          >
-            Train agents, run leagues, and study how strategies emerge in
-            configurable multi-agent environments. Built for researchers.
-          </p>
-
-          {/* CTAs */}
+          {/* Right: animated canvas */}
           <div
             style={{
+              background: "#0d0d0d",
+              border: "1px solid #1e1e1e",
+              borderRadius: 12,
+              overflow: "hidden",
               display: "flex",
+              alignItems: "center",
               justifyContent: "center",
-              gap: 12,
             }}
           >
-            <PrimaryCTA />
-            <SecondaryCTA />
+            <AgentCanvas />
           </div>
         </div>
       </section>

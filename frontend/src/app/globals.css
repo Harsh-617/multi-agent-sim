@@ -35,3 +35,10 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
 }
+
+@media (min-width: 768px) {
+  .hero-grid {
+    grid-template-columns: 1fr 480px;
+    gap: 60px;
+  }
+}
