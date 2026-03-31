@@ -4,26 +4,70 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 // ---------------------------------------------------------------------------
-// Stat-fetching hook
+// Archetype-aware run counting
 // ---------------------------------------------------------------------------
 
-function useStats(runsUrl: string, membersUrl: string) {
-  const [runs, setRuns] = useState<string>("—");
+const MIXED_ONLY = new Set([
+  "always_cooperate",
+  "always_extract",
+  "tit_for_tat",
+  "ppo_shared",
+  "league_snapshot",
+]);
+
+const COMPETITIVE_ONLY = new Set([
+  "always_attack",
+  "always_build",
+  "always_defend",
+  "competitive_ppo",
+]);
+
+function useRunCounts() {
+  const [resourceRuns, setResourceRuns] = useState<string>("—");
+  const [headToHeadRuns, setHeadToHeadRuns] = useState<string>("—");
+
+  useEffect(() => {
+    fetch("/api/runs/history")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: Array<{ agent_policy?: string | null }>) => {
+        let mixed = 0;
+        let competitive = 0;
+        let ambiguous = 0;
+
+        for (const run of data) {
+          const policy = run.agent_policy ?? "";
+          if (MIXED_ONLY.has(policy)) mixed++;
+          else if (COMPETITIVE_ONLY.has(policy)) competitive++;
+          else ambiguous++; // 'random', null, empty, or unknown
+        }
+
+        setResourceRuns(String(mixed + Math.ceil(ambiguous / 2)));
+        setHeadToHeadRuns(String(competitive + Math.floor(ambiguous / 2)));
+      })
+      .catch(() => {
+        setResourceRuns("—");
+        setHeadToHeadRuns("—");
+      });
+  }, []);
+
+  return { resourceRuns, headToHeadRuns };
+}
+
+// ---------------------------------------------------------------------------
+// League member count hook
+// ---------------------------------------------------------------------------
+
+function useMembers(membersUrl: string) {
   const [members, setMembers] = useState<string>("—");
 
   useEffect(() => {
-    fetch(runsUrl)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data: unknown[]) => setRuns(String(data.length)))
-      .catch(() => setRuns("—"));
-
     fetch(membersUrl)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: unknown[]) => setMembers(String(data.length)))
       .catch(() => setMembers("—"));
-  }, [runsUrl, membersUrl]);
+  }, [membersUrl]);
 
-  return { runs, members };
+  return members;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +124,7 @@ function HeroCard({
   accentColor,
   accentSubtle,
   accentBorder,
-  runsUrl,
+  runs,
   membersUrl,
   href,
 }: {
@@ -90,11 +134,11 @@ function HeroCard({
   accentColor: string;
   accentSubtle: string;
   accentBorder: string;
-  runsUrl: string;
+  runs: string;
   membersUrl: string;
   href: string;
 }) {
-  const { runs, members } = useStats(runsUrl, membersUrl);
+  const members = useMembers(membersUrl);
   const [hoverBtn, setHoverBtn] = useState(false);
 
   const hoverColor =
@@ -239,6 +283,7 @@ function AdvancedCard({
 
 export default function SimulatePage() {
   const [tab, setTab] = useState<"templates" | "advanced">("templates");
+  const { resourceRuns, headToHeadRuns } = useRunCounts();
 
   return (
     <main
@@ -319,7 +364,7 @@ export default function SimulatePage() {
               accentColor="var(--accent)"
               accentSubtle="var(--accent-subtle)"
               accentBorder="var(--accent-border)"
-              runsUrl="/api/runs/history"
+              runs={resourceRuns}
               membersUrl="/api/league/members"
               href="/simulate/resource-sharing"
             />
@@ -330,10 +375,7 @@ export default function SimulatePage() {
               accentColor="#f97316"
               accentSubtle="rgba(249,115,22,0.1)"
               accentBorder="rgba(249,115,22,0.2)"
-              /* Note: no dedicated competitive runs history endpoint confirmed;
-                 using /api/runs/history — may need filtering or a separate
-                 endpoint once backend supports it. */
-              runsUrl="/api/runs/history"
+              runs={headToHeadRuns}
               membersUrl="/api/competitive/league/members"
               href="/simulate/head-to-head"
             />
