@@ -49,6 +49,22 @@ body {
     grid-template-columns: 1fr !important;
     gap: 32px !important;
   }
+  .about-two-col {
+    grid-template-columns: 1fr !important;
+    gap: 48px !important;
+  }
+  .about-pipeline {
+    grid-template-columns: 1fr !important;
+  }
+  .about-capabilities {
+    grid-template-columns: 1fr !important;
+  }
+  .about-archetypes {
+    grid-template-columns: 1fr !important;
+  }
+  .about-tech {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 640px) {

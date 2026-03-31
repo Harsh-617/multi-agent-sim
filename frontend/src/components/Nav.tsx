@@ -7,6 +7,7 @@ const navLinks = [
   { label: "Simulate", href: "/simulate" },
   { label: "League", href: "/league" },
   { label: "Research", href: "/research" },
+  { label: "About", href: "/about" },
 ];
 
 function isActive(pathname: string, href: string): boolean {
