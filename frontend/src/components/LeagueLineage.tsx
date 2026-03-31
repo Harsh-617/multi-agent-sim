@@ -14,6 +14,7 @@ export default function LeagueLineage({ members }: Props) {
     rating: m.rating,
     created_at: m.created_at,
     notes: m.notes,
+    label: m.label,
   }));
   return (
     <LineageGraph

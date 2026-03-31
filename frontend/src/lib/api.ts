@@ -293,6 +293,7 @@ export interface LineageMember {
   created_at: string | null;
   notes: string | null;
   rating: number;
+  label?: string;
 }
 
 export interface LineageResponse {
