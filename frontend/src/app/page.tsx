@@ -87,7 +87,14 @@ function useRecentRuns(): RecentRun[] {
   useEffect(() => {
     fetch("/api/runs/history")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data: RecentRun[]) => setRuns(data.slice(-3).reverse()))
+      .then((data: RecentRun[]) => {
+        const sorted = [...data].sort((a, b) => {
+          const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return tb - ta;
+        });
+        setRuns(sorted.slice(0, 3));
+      })
       .catch(() => {});
   }, []);
 
