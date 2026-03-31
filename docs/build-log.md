@@ -513,3 +513,16 @@
 9. Recompute Ratings shows success/error feedback with auto-clear
 10. League lineage/evolution detail panel repositioned as overlay
 11. Evolution tab detail panel dark theme fixed
+
+
+## Home Page Redesign
+
+- Research terminal aesthetic — IBM Plex Mono, dark theme, teal accent
+- Asymmetric two-column hero: headline + CTAs left, live system
+  snapshot card right (pulsing dot, live API stats, recent activity)
+- NetworkBackground.tsx — subtle SVG floating node network background
+- "How it works" section — 4 numbered pipeline steps
+- "What you can study" section — 3 research question cards
+- Feature highlights redesigned with 1px-gap grid layout
+- Quick start redesigned as two-column layout
+- All responsive breakpoints added
