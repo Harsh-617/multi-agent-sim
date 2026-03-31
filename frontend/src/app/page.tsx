@@ -446,57 +446,6 @@ export default function HomePage() {
           <LiveSnapshotCard stats={stats} recentRuns={recentRuns} />
         </section>
 
-        {/* ── Stats Bar ── */}
-        <section
-          style={{
-            background: "var(--bg-surface)",
-            borderTop: "1px solid var(--bg-border)",
-            borderBottom: "1px solid var(--bg-border)",
-            padding: "20px 24px",
-            marginTop: 0,
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-around",
-              maxWidth: 960,
-              margin: "0 auto",
-            }}
-          >
-            {[
-              { value: stats.totalRuns, label: "Total runs" },
-              { value: stats.leagueMembers, label: "League members" },
-              { value: stats.environments, label: "Environments" },
-              { value: stats.reports, label: "Reports" },
-            ].map((s) => (
-              <div key={s.label} style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 500,
-                    color: "var(--text-primary)",
-                    fontFamily: "var(--font-mono)",
-                  }}
-                >
-                  {s.value}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--text-tertiary)",
-                    marginTop: 4,
-                  }}
-                >
-                  {s.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* ── How It Works ── */}
         <section
           style={{
