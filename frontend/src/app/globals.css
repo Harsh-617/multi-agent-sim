@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -20,7 +21,7 @@
   --accent-border: rgba(20, 184, 166, 0.2);
 
   /* Typography */
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
 @theme inline {
@@ -36,6 +37,20 @@ body {
   color: var(--text-primary);
 }
 
+@media (max-width: 768px) {
+  .hero-grid {
+    grid-template-columns: 1fr !important;
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+    padding-top: 80px !important;
+    gap: 40px !important;
+  }
+  .quickstart-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+  }
+}
+
 @media (max-width: 640px) {
   .steps-grid {
     grid-template-columns: repeat(2, 1fr) !important;
@@ -43,5 +58,7 @@ body {
   .research-grid {
     grid-template-columns: 1fr !important;
   }
+  .feature-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
-
