@@ -428,6 +428,7 @@ export interface LeagueEvolutionMember {
   label: string;
   cluster_id: number | null;
   robustness_score: number | null;
+  strategy?: { label: string; cluster_id: number };
 }
 
 export interface ChampionHistoryEntry {
