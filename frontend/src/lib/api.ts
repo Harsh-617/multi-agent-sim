@@ -729,6 +729,79 @@ export function getCompetitiveReportStrategies(reportId: string): Promise<Strate
 }
 
 // ---------------------------------------------------------------------------
+// Pipeline
+// ---------------------------------------------------------------------------
+
+export interface PipelineRunParams {
+  config_id?: string;
+  seed?: number;
+  seeds?: number;
+  episodes_per_seed?: number;
+  max_steps?: number | null;
+  total_timesteps?: number;
+  snapshot_every_timesteps?: number;
+  max_league_members?: number;
+  num_matches?: number;
+  limit_sweeps?: number | null;
+}
+
+export interface PipelineStatusResponse {
+  pipeline_id: string;
+  running: boolean;
+  stage: string;
+  error?: string;
+  report_id?: string;
+  summary_path?: string;
+}
+
+export function startMixedPipeline(
+  params: PipelineRunParams,
+): Promise<{ pipeline_id: string }> {
+  return json(`${BASE}/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
+export function getMixedPipelineStatus(
+  pipelineId: string,
+): Promise<PipelineStatusResponse> {
+  return json(`${BASE}/pipeline/${encodeURIComponent(pipelineId)}/status`);
+}
+
+export interface CompetitivePipelineRunParams {
+  config_id?: string;
+  seed?: number;
+  seeds?: number[] | null;
+  episodes_per_seed?: number;
+  max_steps?: number | null;
+  total_timesteps?: number;
+  snapshot_every_timesteps?: number;
+  max_league_members?: number;
+  num_matches?: number;
+  limit_sweeps?: number | null;
+}
+
+export function startCompetitivePipeline(
+  params: CompetitivePipelineRunParams,
+): Promise<{ pipeline_id: string }> {
+  return json(`${BASE}/pipeline/competitive/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
+export function getCompetitivePipelineStatus(
+  pipelineId: string,
+): Promise<PipelineStatusResponse> {
+  return json(
+    `${BASE}/pipeline/competitive/${encodeURIComponent(pipelineId)}/status`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 

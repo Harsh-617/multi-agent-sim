@@ -30,6 +30,11 @@ import {
   runCompetitiveChampionBenchmark,
   runCompetitiveChampionRobustness,
   startCompetitiveLeagueMemberRun,
+  startMixedPipeline,
+  getMixedPipelineStatus,
+  startCompetitivePipeline,
+  getCompetitivePipelineStatus,
+  PipelineStatusResponse,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
@@ -42,7 +47,7 @@ import LineageGraph from "@/components/LineageGraph";
 // ---------------------------------------------------------------------------
 
 type Archetype = "resource-sharing" | "head-to-head";
-type Tab = "ratings" | "lineage" | "champion" | "evolution";
+type Tab = "ratings" | "pipeline" | "lineage" | "champion" | "evolution";
 
 // ---------------------------------------------------------------------------
 // Competitive helpers (copied from competitive/league/page.tsx)
@@ -205,6 +210,359 @@ function CompetitiveHistoryCard({
 }
 
 // ---------------------------------------------------------------------------
+// Pipeline stage helpers
+// ---------------------------------------------------------------------------
+
+const PIPELINE_STAGES = ["loading_config", "training", "rating", "evaluating", "done"] as const;
+const STAGE_LABELS: Record<string, string> = {
+  loading_config: "Loading",
+  training: "Training",
+  rating: "Rating",
+  evaluating: "Evaluating",
+  done: "Done",
+};
+const STAGE_DESCRIPTIONS: Record<string, string> = {
+  loading_config: "Loading configuration...",
+  training: "Training PPO agent with self-play...",
+  snapshotting: "Saving league snapshots...",
+  rating: "Computing Elo ratings...",
+  evaluating: "Running robustness sweeps...",
+  reporting: "Generating report...",
+  done: "Pipeline complete!",
+  error: "Pipeline failed — check logs",
+};
+
+function stageIndex(stage: string): number {
+  const idx = PIPELINE_STAGES.indexOf(stage as typeof PIPELINE_STAGES[number]);
+  // snapshotting/reporting map to their parent stage
+  if (stage === "snapshotting") return 1; // training
+  if (stage === "reporting") return 3; // evaluating
+  return idx >= 0 ? idx : -1;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline tab content component
+// ---------------------------------------------------------------------------
+
+interface PipelineTabContentProps {
+  pipelineId: string | null;
+  pipelineStage: string | null;
+  pipelineError: string | null;
+  pipelineReportId: string | null;
+  totalTimesteps: number;
+  setTotalTimesteps: (v: number) => void;
+  snapshotEvery: number;
+  setSnapshotEvery: (v: number) => void;
+  seed: number;
+  setSeed: (v: number) => void;
+  advanced: boolean;
+  setAdvanced: (v: boolean) => void;
+  evalSeeds: number;
+  setEvalSeeds: (v: number) => void;
+  episodesPerSeed: number;
+  setEpisodesPerSeed: (v: number) => void;
+  limitSweeps: string;
+  setLimitSweeps: (v: string) => void;
+  onRun: () => void;
+  onSwitchToRatings: () => void;
+}
+
+const inputStyle: React.CSSProperties = {
+  background: "var(--bg-elevated)",
+  border: "1px solid var(--bg-border)",
+  borderRadius: 6,
+  padding: "8px 12px",
+  color: "var(--text-primary)",
+  fontSize: 13,
+  height: 36,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+function PipelineTabContent({
+  pipelineId,
+  pipelineStage,
+  pipelineError,
+  pipelineReportId,
+  totalTimesteps,
+  setTotalTimesteps,
+  snapshotEvery,
+  setSnapshotEvery,
+  seed,
+  setSeed,
+  advanced,
+  setAdvanced,
+  evalSeeds,
+  setEvalSeeds,
+  episodesPerSeed,
+  setEpisodesPerSeed,
+  limitSweeps,
+  setLimitSweeps,
+  onRun,
+  onSwitchToRatings,
+}: PipelineTabContentProps) {
+  const isRunning = pipelineStage != null && pipelineStage !== "done" && pipelineStage !== "error";
+  const isDone = pipelineStage === "done";
+  const isError = pipelineStage === "error";
+  const currentIdx = pipelineStage ? stageIndex(pipelineStage) : -1;
+
+  return (
+    <div style={{ maxWidth: 600, margin: "0 auto" }}>
+      {/* Description */}
+      <h3 style={{
+        fontSize: 14,
+        fontWeight: 500,
+        color: "var(--text-primary)",
+        marginBottom: 8,
+        marginTop: 0,
+      }}>
+        Run full training pipeline
+      </h3>
+      <p style={{
+        fontSize: 13,
+        color: "var(--text-secondary)",
+        lineHeight: 1.6,
+        marginBottom: 24,
+        marginTop: 0,
+      }}>
+        Trains a PPO agent via self-play, saves periodic snapshots to the league,
+        runs Elo rating, evaluates the champion across robustness sweeps, and
+        generates a report. All in one click.
+      </p>
+
+      {/* Config form */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
+        gap: 12,
+        marginBottom: 16,
+      }}>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+            Training steps
+          </label>
+          <input
+            type="number"
+            min={1000}
+            value={totalTimesteps}
+            onChange={(e) => setTotalTimesteps(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+            Snapshot every
+          </label>
+          <input
+            type="number"
+            min={1000}
+            value={snapshotEvery}
+            onChange={(e) => setSnapshotEvery(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+            Seed
+          </label>
+          <input
+            type="number"
+            value={seed}
+            onChange={(e) => setSeed(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+
+      {/* Advanced toggle */}
+      <div style={{ marginBottom: 20 }}>
+        <button
+          onClick={() => setAdvanced(!advanced)}
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--text-secondary)",
+            fontSize: 12,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          {advanced ? "▾ Advanced" : "▸ Advanced"}
+        </button>
+        {advanced && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 12,
+            marginTop: 12,
+          }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                Seeds (evaluation)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={evalSeeds}
+                onChange={(e) => setEvalSeeds(Number(e.target.value))}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                Episodes/seed
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={episodesPerSeed}
+                onChange={(e) => setEpisodesPerSeed(Number(e.target.value))}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                Limit sweeps
+              </label>
+              <input
+                type="number"
+                min={1}
+                placeholder="all"
+                value={limitSweeps}
+                onChange={(e) => setLimitSweeps(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Run button */}
+      <button
+        onClick={onRun}
+        disabled={isRunning}
+        style={{
+          background: isRunning ? "var(--accent)" : "var(--accent)",
+          color: "#0a0a0a",
+          padding: "10px 24px",
+          borderRadius: 6,
+          fontSize: 14,
+          fontWeight: 500,
+          border: "none",
+          cursor: isRunning ? "not-allowed" : "pointer",
+          width: "100%",
+          opacity: isRunning ? 0.5 : 1,
+          transition: "opacity 150ms",
+        }}
+        onMouseEnter={(e) => {
+          if (!isRunning) e.currentTarget.style.opacity = "0.85";
+        }}
+        onMouseLeave={(e) => {
+          if (!isRunning) e.currentTarget.style.opacity = "1";
+        }}
+      >
+        {isRunning ? "Pipeline Running..." : "Run Pipeline"}
+      </button>
+
+      {/* Stage pills */}
+      {pipelineStage && pipelineStage !== "idle" && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            {PIPELINE_STAGES.map((s, i) => {
+              const sIdx = i;
+              const label = STAGE_LABELS[s];
+              let bg: string;
+              let color: string;
+              let border: string;
+              let prefix = "";
+
+              if (sIdx < currentIdx || isDone) {
+                // completed
+                bg = "var(--bg-elevated)";
+                color = "var(--text-secondary)";
+                border = "1px solid transparent";
+                prefix = "\u2713 ";
+              } else if (sIdx === currentIdx && !isDone && !isError) {
+                // active
+                bg = "var(--accent)";
+                color = "#0a0a0a";
+                border = "1px solid transparent";
+              } else {
+                // pending
+                bg = "var(--bg-surface)";
+                color = "var(--text-tertiary)";
+                border = "1px solid var(--bg-border)";
+              }
+
+              return (
+                <span
+                  key={s}
+                  style={{
+                    fontSize: 11,
+                    padding: "4px 10px",
+                    borderRadius: 9999,
+                    background: bg,
+                    color,
+                    border,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {prefix}{label}
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Status description */}
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>
+            {STAGE_DESCRIPTIONS[pipelineStage] ?? pipelineStage}
+          </p>
+
+          {/* Done state */}
+          {isDone && (
+            <div style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 13, color: "var(--accent)", margin: "0 0 8px 0" }}>
+                Pipeline complete — new agents added to league
+              </p>
+              <div style={{ display: "flex", gap: 16 }}>
+                {pipelineReportId && (
+                  <a
+                    href={`/research/${encodeURIComponent(pipelineReportId)}`}
+                    style={{ fontSize: 13, color: "var(--accent)", textDecoration: "none" }}
+                  >
+                    View report →
+                  </a>
+                )}
+                <button
+                  onClick={onSwitchToRatings}
+                  style={{
+                    fontSize: 13,
+                    color: "var(--accent)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  View league →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Error state */}
+          {isError && pipelineError && (
+            <p style={{ fontSize: 13, color: "#ef4444", marginTop: 12 }}>
+              Pipeline failed: {pipelineError}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -257,6 +615,26 @@ export default function LeaguePage() {
   // Recompute feedback state (per archetype so only one message shows)
   const [rsRecomputeStatus, setRsRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [hhRecomputeStatus, setHhRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+
+  // --- Pipeline state (per archetype) ---
+  const [rsPipelineId, setRsPipelineId] = useState<string | null>(null);
+  const [rsPipelineStage, setRsPipelineStage] = useState<string | null>(null);
+  const [rsPipelineError, setRsPipelineError] = useState<string | null>(null);
+  const [rsPipelineReportId, setRsPipelineReportId] = useState<string | null>(null);
+
+  const [hhPipelineId, setHhPipelineId] = useState<string | null>(null);
+  const [hhPipelineStage, setHhPipelineStage] = useState<string | null>(null);
+  const [hhPipelineError, setHhPipelineError] = useState<string | null>(null);
+  const [hhPipelineReportId, setHhPipelineReportId] = useState<string | null>(null);
+
+  // Pipeline config form state
+  const [pipelineTotalTimesteps, setPipelineTotalTimesteps] = useState(50000);
+  const [pipelineSnapshotEvery, setPipelineSnapshotEvery] = useState(10000);
+  const [pipelineSeed, setPipelineSeed] = useState(42);
+  const [pipelineAdvanced, setPipelineAdvanced] = useState(false);
+  const [pipelineEvalSeeds, setPipelineEvalSeeds] = useState(3);
+  const [pipelineEpisodesPerSeed, setPipelineEpisodesPerSeed] = useState(2);
+  const [pipelineLimitSweeps, setPipelineLimitSweeps] = useState<string>("");
 
   // --- Load Resource Sharing data ---
   async function loadResourceSharing() {
@@ -429,6 +807,82 @@ export default function LeaguePage() {
     }
   }
 
+  // --- Pipeline handlers ---
+  async function handleStartPipeline() {
+    const shared = {
+      total_timesteps: pipelineTotalTimesteps,
+      snapshot_every_timesteps: pipelineSnapshotEvery,
+      seed: pipelineSeed,
+      episodes_per_seed: pipelineEpisodesPerSeed,
+      ...(pipelineLimitSweeps !== "" ? { limit_sweeps: Number(pipelineLimitSweeps) } : {}),
+    };
+
+    try {
+      if (isRS) {
+        const { pipeline_id } = await startMixedPipeline({
+          ...shared,
+          seeds: pipelineEvalSeeds,
+        });
+        setRsPipelineId(pipeline_id);
+        setRsPipelineStage("loading_config");
+        setRsPipelineError(null);
+        setRsPipelineReportId(null);
+      } else {
+        const seedList = Array.from({ length: pipelineEvalSeeds }, (_, i) => pipelineSeed + i);
+        const { pipeline_id } = await startCompetitivePipeline({
+          ...shared,
+          seeds: seedList,
+        });
+        setHhPipelineId(pipeline_id);
+        setHhPipelineStage("loading_config");
+        setHhPipelineError(null);
+        setHhPipelineReportId(null);
+      }
+    } catch (e) {
+      if (isRS) {
+        setRsPipelineError(String(e));
+      } else {
+        setHhPipelineError(String(e));
+      }
+    }
+  }
+
+  // Pipeline polling
+  useEffect(() => {
+    if (!rsPipelineId || rsPipelineStage === "done" || rsPipelineStage === "error") return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getMixedPipelineStatus(rsPipelineId);
+        setRsPipelineStage(status.stage);
+        if (status.error) setRsPipelineError(status.error);
+        if (status.report_id) setRsPipelineReportId(status.report_id);
+        if (status.stage === "done" || status.stage === "error") {
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [rsPipelineId, rsPipelineStage]);
+
+  useEffect(() => {
+    if (!hhPipelineId || hhPipelineStage === "done" || hhPipelineStage === "error") return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getCompetitivePipelineStatus(hhPipelineId);
+        setHhPipelineStage(status.stage);
+        if (status.error) setHhPipelineError(status.error);
+        if (status.stage === "done" || status.stage === "error") {
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [hhPipelineId, hhPipelineStage]);
+
   // --- Derived values ---
   const isRS = archetype === "resource-sharing";
   const loading = isRS ? rsLoading : hhLoading;
@@ -598,7 +1052,7 @@ export default function LeaguePage() {
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--bg-border)", marginBottom: "32px" }}>
-        {(["ratings", "lineage", "champion", "evolution"] as Tab[]).map((t) => (
+        {(["ratings", "pipeline", "lineage", "champion", "evolution"] as Tab[]).map((t) => (
           <button
             key={t}
             style={tab === t ? subTabActive : subTabInactive}
@@ -678,6 +1132,32 @@ export default function LeaguePage() {
                     </tbody>
                   </table>
                 )
+              )}
+
+              {/* Pipeline tab */}
+              {tab === "pipeline" && (
+                <PipelineTabContent
+                  pipelineId={rsPipelineId}
+                  pipelineStage={rsPipelineStage}
+                  pipelineError={rsPipelineError}
+                  pipelineReportId={rsPipelineReportId}
+                  totalTimesteps={pipelineTotalTimesteps}
+                  setTotalTimesteps={setPipelineTotalTimesteps}
+                  snapshotEvery={pipelineSnapshotEvery}
+                  setSnapshotEvery={setPipelineSnapshotEvery}
+                  seed={pipelineSeed}
+                  setSeed={setPipelineSeed}
+                  advanced={pipelineAdvanced}
+                  setAdvanced={setPipelineAdvanced}
+                  evalSeeds={pipelineEvalSeeds}
+                  setEvalSeeds={setPipelineEvalSeeds}
+                  episodesPerSeed={pipelineEpisodesPerSeed}
+                  setEpisodesPerSeed={setPipelineEpisodesPerSeed}
+                  limitSweeps={pipelineLimitSweeps}
+                  setLimitSweeps={setPipelineLimitSweeps}
+                  onRun={handleStartPipeline}
+                  onSwitchToRatings={() => setTab("ratings")}
+                />
               )}
 
               {/* Lineage tab */}
@@ -800,6 +1280,32 @@ export default function LeaguePage() {
                     </tbody>
                   </table>
                 ))}
+
+              {/* Pipeline tab */}
+              {tab === "pipeline" && (
+                <PipelineTabContent
+                  pipelineId={hhPipelineId}
+                  pipelineStage={hhPipelineStage}
+                  pipelineError={hhPipelineError}
+                  pipelineReportId={hhPipelineReportId}
+                  totalTimesteps={pipelineTotalTimesteps}
+                  setTotalTimesteps={setPipelineTotalTimesteps}
+                  snapshotEvery={pipelineSnapshotEvery}
+                  setSnapshotEvery={setPipelineSnapshotEvery}
+                  seed={pipelineSeed}
+                  setSeed={setPipelineSeed}
+                  advanced={pipelineAdvanced}
+                  setAdvanced={setPipelineAdvanced}
+                  evalSeeds={pipelineEvalSeeds}
+                  setEvalSeeds={setPipelineEvalSeeds}
+                  episodesPerSeed={pipelineEpisodesPerSeed}
+                  setEpisodesPerSeed={setPipelineEpisodesPerSeed}
+                  limitSweeps={pipelineLimitSweeps}
+                  setLimitSweeps={setPipelineLimitSweeps}
+                  onRun={handleStartPipeline}
+                  onSwitchToRatings={() => setTab("ratings")}
+                />
+              )}
 
               {/* Lineage tab */}
               {tab === "lineage" && (

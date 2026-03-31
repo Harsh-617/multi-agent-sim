@@ -8,11 +8,11 @@ GET /api/pipeline/{pipeline_id}/status
     Poll status of a previously started pipeline.
     Returns { running, pipeline_id, stage, error?, report_id?, summary_path? }.
 
-POST /api/competitive/pipeline/run
+POST /api/pipeline/competitive/run
     Start a competitive pipeline (training → rating → evaluating → summary).
     Returns { pipeline_id }.
 
-GET /api/competitive/pipeline/{pipeline_id}/status
+GET /api/pipeline/competitive/{pipeline_id}/status
     Poll status of a competitive pipeline run.
     Returns { running, pipeline_id, stage, error?, summary_path? }.
 """
@@ -260,7 +260,7 @@ async def _run_competitive_pipeline_task(
 # ---------------------------------------------------------------------------
 
 competitive_router = APIRouter(
-    prefix="/api/competitive/pipeline", tags=["competitive-pipeline"],
+    prefix="/api/pipeline/competitive", tags=["competitive-pipeline"],
 )
 
 
