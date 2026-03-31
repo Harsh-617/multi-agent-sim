@@ -450,6 +450,11 @@ export default function LeaguePage() {
     return rb - ra || a.member_id.localeCompare(b.member_id);
   });
 
+  // Resource Sharing champion (highest rated)
+  const rsChampion: LeagueMember | null =
+    rsSorted.length > 0 ? rsSorted[0] : null;
+  const rsChampionRating = rsChampion ? rsRatings.get(rsChampion.member_id) : null;
+
   // Head-to-Head champion (highest rated)
   const hhChampion: CompetitiveLeagueMember | null =
     hhSorted.length > 0 ? hhSorted[0] : null;
@@ -688,6 +693,31 @@ export default function LeaguePage() {
                   </p>
                 ) : (
                   <div className="space-y-6">
+                    {/* Champion info */}
+                    {rsChampion ? (
+                      <div className="border border-gray-200 rounded p-4 text-sm">
+                        <h3 className="font-semibold mb-2">Current Champion</h3>
+                        <dl className="grid grid-cols-2 gap-x-6 gap-y-1">
+                          <dt className="text-gray-500">Member ID</dt>
+                          <dd className="font-mono text-xs">{rsChampion.member_id}</dd>
+                          <dt className="text-gray-500">Rating</dt>
+                          <dd className="font-mono">
+                            {rsChampionRating != null
+                              ? rsChampionRating.toFixed(1)
+                              : "—"}
+                          </dd>
+                          <dt className="text-gray-500">Parent</dt>
+                          <dd className="font-mono text-xs">
+                            {rsChampion.parent_id ?? "none"}
+                          </dd>
+                        </dl>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">
+                        No league members yet. Train a policy and save a snapshot to get started.
+                      </p>
+                    )}
+
                     <div>
                       <h3 className="text-sm font-semibold mb-2">Champion Benchmark</h3>
                       <ChampionBenchmark configs={rsConfigs} />
