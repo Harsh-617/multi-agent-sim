@@ -111,17 +111,20 @@ def _ratings_map() -> dict[str, float]:
 
 @router.get("/lineage")
 async def get_lineage() -> dict:
-    """Return all members enriched with their Elo rating."""
+    """Return all members enriched with their Elo rating and strategy label."""
     members = _registry.list_members()
     ratings = _ratings_map()
+    clusters, label_map = _evolution_clusters_and_labels(members, ratings)
     enriched = []
     for m in members:
+        mid = m["member_id"]
         enriched.append({
-            "member_id": m["member_id"],
+            "member_id": mid,
             "parent_id": m.get("parent_id"),
             "created_at": m.get("created_at"),
             "notes": m.get("notes"),
-            "rating": ratings.get(m["member_id"], _DEFAULT_RATING),
+            "rating": ratings.get(mid, _DEFAULT_RATING),
+            "label": label_map.get(clusters.get(mid, 0), "Developing"),
         })
     enriched.sort(key=lambda x: x["member_id"])
     return {"members": enriched}
