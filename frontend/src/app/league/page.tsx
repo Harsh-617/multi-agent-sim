@@ -256,6 +256,12 @@ function stageLabel(stage: string): string {
   return labels[stage] ?? stage;
 }
 
+interface PipelineConfig {
+  totalTimesteps: number;
+  snapshotEvery: number;
+  seed: number;
+}
+
 interface PipelinePanelProps {
   label: string;
   accentColor: string;
@@ -264,11 +270,36 @@ interface PipelinePanelProps {
   reportId: string | null;
   onRun: () => void;
   running: boolean;
+  config: PipelineConfig;
+  onConfigChange: (config: PipelineConfig) => void;
 }
 
 function PipelinePanel({
   label, accentColor, stage, error, reportId, onRun, running,
+  config, onConfigChange,
 }: PipelinePanelProps) {
+  const [showSettings, setShowSettings] = useState(false);
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--bg-base)",
+    border: "1px solid var(--bg-border)",
+    borderRadius: 4,
+    padding: "5px 8px",
+    color: "var(--text-primary)",
+    fontSize: 12,
+    width: "100%",
+    fontFamily: "var(--font-mono)",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: "var(--text-tertiary)",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginBottom: 3,
+  };
+
   return (
     <div style={{
       background: "var(--bg-elevated)",
@@ -300,15 +331,78 @@ function PipelinePanel({
           fontSize: 13,
           fontWeight: 500,
           cursor: running ? "not-allowed" : "pointer",
-          marginBottom: 12,
+          marginBottom: 0,
         }}
       >
         {running ? "Running..." : "Run Pipeline →"}
       </button>
 
+      {/* Settings toggle */}
+      <button
+        onClick={() => setShowSettings((v) => !v)}
+        style={{
+          fontSize: 11,
+          color: "var(--text-tertiary)",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+          marginTop: 8,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; }}
+      >
+        Settings {showSettings ? "▴" : "▾"}
+      </button>
+
+      {/* Settings inputs */}
+      {showSettings && (
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "1px solid var(--bg-border)",
+        }}>
+          <div>
+            <div style={labelStyle}>Training steps</div>
+            <input
+              type="number"
+              min={1000}
+              step={1000}
+              value={config.totalTimesteps}
+              onChange={(e) => onConfigChange({ ...config, totalTimesteps: Number(e.target.value) })}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <div style={labelStyle}>Snapshot every N steps</div>
+            <input
+              type="number"
+              min={500}
+              step={500}
+              value={config.snapshotEvery}
+              onChange={(e) => onConfigChange({ ...config, snapshotEvery: Number(e.target.value) })}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <div style={labelStyle}>Seed</div>
+            <input
+              type="number"
+              min={0}
+              value={config.seed}
+              onChange={(e) => onConfigChange({ ...config, seed: Number(e.target.value) })}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Stage display */}
       {stage && (
-        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 12 }}>
           {stage === "done" ? (
             <span style={{ color: "var(--accent)" }}>
               ✓ Complete
@@ -403,6 +497,18 @@ export default function LeaguePage() {
   const [hhPipelineError, setHhPipelineError] = useState<string | null>(null);
   const [hhPipelineReportId, setHhPipelineReportId] = useState<string | null>(null);
 
+  // --- Pipeline config state (per archetype) ---
+  const [rsPipelineConfig, setRsPipelineConfig] = useState<PipelineConfig>({
+    totalTimesteps: 50000,
+    snapshotEvery: 10000,
+    seed: 42,
+  });
+
+  const [hhPipelineConfig, setHhPipelineConfig] = useState<PipelineConfig>({
+    totalTimesteps: 50000,
+    snapshotEvery: 10000,
+    seed: 42,
+  });
 
   // --- Load Resource Sharing data ---
   async function loadResourceSharing() {
@@ -579,9 +685,9 @@ export default function LeaguePage() {
   async function handleStartRsPipeline() {
     try {
       const { pipeline_id } = await startMixedPipeline({
-        total_timesteps: 50000,
-        snapshot_every_timesteps: 10000,
-        seed: 42,
+        total_timesteps: rsPipelineConfig.totalTimesteps,
+        snapshot_every_timesteps: rsPipelineConfig.snapshotEvery,
+        seed: rsPipelineConfig.seed,
         episodes_per_seed: 2,
         seeds: 3,
       });
@@ -596,11 +702,11 @@ export default function LeaguePage() {
 
   async function handleStartHhPipeline() {
     try {
-      const seedList = Array.from({ length: 3 }, (_, i) => 42 + i);
+      const seedList = Array.from({ length: 3 }, (_, i) => hhPipelineConfig.seed + i);
       const { pipeline_id } = await startCompetitivePipeline({
-        total_timesteps: 50000,
-        snapshot_every_timesteps: 10000,
-        seed: 42,
+        total_timesteps: hhPipelineConfig.totalTimesteps,
+        snapshot_every_timesteps: hhPipelineConfig.snapshotEvery,
+        seed: hhPipelineConfig.seed,
         episodes_per_seed: 2,
         seeds: seedList,
       });
@@ -795,6 +901,8 @@ export default function LeaguePage() {
             running={rsPipelineStage !== null &&
               rsPipelineStage !== "done" &&
               rsPipelineStage !== "error"}
+            config={rsPipelineConfig}
+            onConfigChange={setRsPipelineConfig}
           />
 
           {/* Head-to-Head pipeline */}
@@ -808,6 +916,8 @@ export default function LeaguePage() {
             running={hhPipelineStage !== null &&
               hhPipelineStage !== "done" &&
               hhPipelineStage !== "error"}
+            config={hhPipelineConfig}
+            onConfigChange={setHhPipelineConfig}
           />
         </div>
       </div>
