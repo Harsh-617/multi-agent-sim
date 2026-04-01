@@ -35,8 +35,8 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
   if (entries.length === 0)
     return <p style={{ color: "#666666" }}>No data.</p>;
 
-  const pad = { top: 30, right: 30, bottom: 50, left: 70 };
-  const w = 500;
+  const pad = { top: 30, right: 90, bottom: 50, left: 70 };
+  const w = 560;
   const h = 360;
   const plotW = w - pad.left - pad.right;
   const plotH = h - pad.top - pad.bottom;
@@ -153,21 +153,40 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
           );
         })}
 
-        {/* Legend */}
+      </svg>
+      <div style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "8px 16px",
+        marginTop: 12,
+        paddingLeft: pad.left,
+      }}>
         {entries.map((e, i) => {
           const color = COLORS[i % COLORS.length];
-          const lx = pad.left + plotW - 100;
-          const ly = pad.top + 10 + i * 14;
           return (
-            <g key={`legend-${e.policy_name}`}>
-              <circle cx={lx} cy={ly} r={4} fill={color} />
-              <text x={lx + 8} y={ly + 3} fontSize={9} fill="#888888" fontFamily="monospace">
+            <div key={e.policy_name} style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}>
+              <div style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: color,
+                flexShrink: 0,
+              }} />
+              <span style={{
+                fontSize: 11,
+                color: "#888888",
+                fontFamily: "monospace",
+              }}>
                 {e.policy_name}
-              </text>
-            </g>
+              </span>
+            </div>
           );
         })}
-      </svg>
+      </div>
     </div>
   );
 }
