@@ -47,7 +47,7 @@ import LineageGraph from "@/components/LineageGraph";
 // ---------------------------------------------------------------------------
 
 type Archetype = "resource-sharing" | "head-to-head";
-type Tab = "ratings" | "pipeline" | "lineage" | "champion" | "evolution";
+type Tab = "ratings" | "champion" | "evolution";
 
 // ---------------------------------------------------------------------------
 // Competitive helpers (copied from competitive/league/page.tsx)
@@ -241,320 +241,96 @@ function stageIndex(stage: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Pipeline tab content component
+// Pipeline panel components
 // ---------------------------------------------------------------------------
 
-interface PipelineTabContentProps {
-  pipelineId: string | null;
-  pipelineStage: string | null;
-  pipelineError: string | null;
-  pipelineReportId: string | null;
-  totalTimesteps: number;
-  setTotalTimesteps: (v: number) => void;
-  snapshotEvery: number;
-  setSnapshotEvery: (v: number) => void;
-  seed: number;
-  setSeed: (v: number) => void;
-  advanced: boolean;
-  setAdvanced: (v: boolean) => void;
-  evalSeeds: number;
-  setEvalSeeds: (v: number) => void;
-  episodesPerSeed: number;
-  setEpisodesPerSeed: (v: number) => void;
-  limitSweeps: string;
-  setLimitSweeps: (v: string) => void;
-  onRun: () => void;
-  onSwitchToRatings: () => void;
+function stageLabel(stage: string): string {
+  const labels: Record<string, string> = {
+    loading_config: "Loading config...",
+    training: "Training PPO agents...",
+    snapshotting: "Saving snapshots...",
+    rating: "Computing Elo ratings...",
+    evaluating: "Running robustness sweeps...",
+    reporting: "Generating report...",
+  };
+  return labels[stage] ?? stage;
 }
 
-const inputStyle: React.CSSProperties = {
-  background: "var(--bg-elevated)",
-  border: "1px solid var(--bg-border)",
-  borderRadius: 6,
-  padding: "8px 12px",
-  color: "var(--text-primary)",
-  fontSize: 13,
-  height: 36,
-  width: "100%",
-  boxSizing: "border-box",
-};
+interface PipelinePanelProps {
+  label: string;
+  accentColor: string;
+  stage: string | null;
+  error: string | null;
+  reportId: string | null;
+  onRun: () => void;
+  running: boolean;
+}
 
-function PipelineTabContent({
-  pipelineId,
-  pipelineStage,
-  pipelineError,
-  pipelineReportId,
-  totalTimesteps,
-  setTotalTimesteps,
-  snapshotEvery,
-  setSnapshotEvery,
-  seed,
-  setSeed,
-  advanced,
-  setAdvanced,
-  evalSeeds,
-  setEvalSeeds,
-  episodesPerSeed,
-  setEpisodesPerSeed,
-  limitSweeps,
-  setLimitSweeps,
-  onRun,
-  onSwitchToRatings,
-}: PipelineTabContentProps) {
-  const isRunning = pipelineStage != null && pipelineStage !== "done" && pipelineStage !== "error";
-  const isDone = pipelineStage === "done";
-  const isError = pipelineStage === "error";
-  const currentIdx = pipelineStage ? stageIndex(pipelineStage) : -1;
-
+function PipelinePanel({
+  label, accentColor, stage, error, reportId, onRun, running,
+}: PipelinePanelProps) {
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto" }}>
-      {/* Description */}
-      <h3 style={{
-        fontSize: 14,
-        fontWeight: 500,
-        color: "var(--text-primary)",
-        marginBottom: 8,
-        marginTop: 0,
-      }}>
-        Run full training pipeline
-      </h3>
+    <div style={{
+      background: "var(--bg-elevated)",
+      border: "1px solid var(--bg-border)",
+      borderRadius: 6,
+      padding: 16,
+    }}>
+      {/* Archetype label */}
       <p style={{
-        fontSize: 13,
-        color: "var(--text-secondary)",
-        lineHeight: 1.6,
-        marginBottom: 24,
-        marginTop: 0,
-      }}>
-        Trains a PPO agent via self-play, saves periodic snapshots to the league,
-        runs Elo rating, evaluates the champion across robustness sweeps, and
-        generates a report. All in one click.
-      </p>
-
-      {/* Config form */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr",
-        gap: 12,
-        marginBottom: 16,
-      }}>
-        <div>
-          <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-            Training steps
-          </label>
-          <input
-            type="number"
-            min={1000}
-            value={totalTimesteps}
-            onChange={(e) => setTotalTimesteps(Number(e.target.value))}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-            Snapshot every
-          </label>
-          <input
-            type="number"
-            min={1000}
-            value={snapshotEvery}
-            onChange={(e) => setSnapshotEvery(Number(e.target.value))}
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-            Seed
-          </label>
-          <input
-            type="number"
-            value={seed}
-            onChange={(e) => setSeed(Number(e.target.value))}
-            style={inputStyle}
-          />
-        </div>
-      </div>
-
-      {/* Advanced toggle */}
-      <div style={{ marginBottom: 20 }}>
-        <button
-          onClick={() => setAdvanced(!advanced)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--text-secondary)",
-            fontSize: 12,
-            cursor: "pointer",
-            padding: 0,
-          }}
-        >
-          {advanced ? "▾ Advanced" : "▸ Advanced"}
-        </button>
-        {advanced && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: 12,
-            marginTop: 12,
-          }}>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-                Seeds (evaluation)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={evalSeeds}
-                onChange={(e) => setEvalSeeds(Number(e.target.value))}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-                Episodes/seed
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={episodesPerSeed}
-                onChange={(e) => setEpisodesPerSeed(Number(e.target.value))}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-                Limit sweeps
-              </label>
-              <input
-                type="number"
-                min={1}
-                placeholder="all"
-                value={limitSweeps}
-                onChange={(e) => setLimitSweeps(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-        )}
-      </div>
+        fontSize: 11,
+        fontWeight: 500,
+        color: accentColor,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        marginBottom: 12,
+      }}>{label}</p>
 
       {/* Run button */}
       <button
         onClick={onRun}
-        disabled={isRunning}
+        disabled={running}
         style={{
-          background: isRunning ? "var(--accent)" : "var(--accent)",
-          color: "#0a0a0a",
-          padding: "10px 24px",
-          borderRadius: 6,
-          fontSize: 14,
-          fontWeight: 500,
-          border: "none",
-          cursor: isRunning ? "not-allowed" : "pointer",
           width: "100%",
-          opacity: isRunning ? 0.5 : 1,
-          transition: "opacity 150ms",
-        }}
-        onMouseEnter={(e) => {
-          if (!isRunning) e.currentTarget.style.opacity = "0.85";
-        }}
-        onMouseLeave={(e) => {
-          if (!isRunning) e.currentTarget.style.opacity = "1";
+          padding: "8px 16px",
+          background: running ? "var(--bg-surface)" : accentColor,
+          color: running ? "var(--text-tertiary)" : "#0a0a0a",
+          border: "none",
+          borderRadius: 6,
+          fontSize: 13,
+          fontWeight: 500,
+          cursor: running ? "not-allowed" : "pointer",
+          marginBottom: 12,
         }}
       >
-        {isRunning ? "Pipeline Running..." : "Run Pipeline"}
+        {running ? "Running..." : "Run Pipeline →"}
       </button>
 
-      {/* Stage pills */}
-      {pipelineStage && pipelineStage !== "idle" && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-            {PIPELINE_STAGES.map((s, i) => {
-              const sIdx = i;
-              const label = STAGE_LABELS[s];
-              let bg: string;
-              let color: string;
-              let border: string;
-              let prefix = "";
-
-              if (sIdx < currentIdx || isDone) {
-                // completed
-                bg = "var(--bg-elevated)";
-                color = "var(--text-secondary)";
-                border = "1px solid transparent";
-                prefix = "\u2713 ";
-              } else if (sIdx === currentIdx && !isDone && !isError) {
-                // active
-                bg = "var(--accent)";
-                color = "#0a0a0a";
-                border = "1px solid transparent";
-              } else {
-                // pending
-                bg = "var(--bg-surface)";
-                color = "var(--text-tertiary)";
-                border = "1px solid var(--bg-border)";
-              }
-
-              return (
-                <span
-                  key={s}
+      {/* Stage display */}
+      {stage && (
+        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+          {stage === "done" ? (
+            <span style={{ color: "var(--accent)" }}>
+              ✓ Complete
+              {reportId && (
+                <a
+                  href={`/research/${reportId}`}
                   style={{
-                    fontSize: 11,
-                    padding: "4px 10px",
-                    borderRadius: 9999,
-                    background: bg,
-                    color,
-                    border,
-                    whiteSpace: "nowrap",
+                    color: accentColor,
+                    marginLeft: 8,
+                    textDecoration: "none",
                   }}
                 >
-                  {prefix}{label}
-                </span>
-              );
-            })}
-          </div>
-
-          {/* Status description */}
-          <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>
-            {STAGE_DESCRIPTIONS[pipelineStage] ?? pipelineStage}
-          </p>
-
-          {/* Done state */}
-          {isDone && (
-            <div style={{ marginTop: 16 }}>
-              <p style={{ fontSize: 13, color: "var(--accent)", margin: "0 0 8px 0" }}>
-                Pipeline complete — new agents added to league
-              </p>
-              <div style={{ display: "flex", gap: 16 }}>
-                {pipelineReportId && (
-                  <a
-                    href={`/research/${encodeURIComponent(pipelineReportId)}`}
-                    style={{ fontSize: 13, color: "var(--accent)", textDecoration: "none" }}
-                  >
-                    View report →
-                  </a>
-                )}
-                <button
-                  onClick={onSwitchToRatings}
-                  style={{
-                    fontSize: 13,
-                    color: "var(--accent)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                  }}
-                >
-                  View league →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Error state */}
-          {isError && pipelineError && (
-            <p style={{ fontSize: 13, color: "#ef4444", marginTop: 12 }}>
-              Pipeline failed: {pipelineError}
-            </p>
+                  View report →
+                </a>
+              )}
+            </span>
+          ) : stage === "error" ? (
+            <span style={{ color: "#ef4444" }}>
+              Failed: {error}
+            </span>
+          ) : (
+            <span>{stageLabel(stage)}</span>
           )}
         </div>
       )}
@@ -627,14 +403,6 @@ export default function LeaguePage() {
   const [hhPipelineError, setHhPipelineError] = useState<string | null>(null);
   const [hhPipelineReportId, setHhPipelineReportId] = useState<string | null>(null);
 
-  // Pipeline config form state
-  const [pipelineTotalTimesteps, setPipelineTotalTimesteps] = useState(50000);
-  const [pipelineSnapshotEvery, setPipelineSnapshotEvery] = useState(10000);
-  const [pipelineSeed, setPipelineSeed] = useState(42);
-  const [pipelineAdvanced, setPipelineAdvanced] = useState(false);
-  const [pipelineEvalSeeds, setPipelineEvalSeeds] = useState(3);
-  const [pipelineEpisodesPerSeed, setPipelineEpisodesPerSeed] = useState(2);
-  const [pipelineLimitSweeps, setPipelineLimitSweeps] = useState<string>("");
 
   // --- Load Resource Sharing data ---
   async function loadResourceSharing() {
@@ -808,42 +576,40 @@ export default function LeaguePage() {
   }
 
   // --- Pipeline handlers ---
-  async function handleStartPipeline() {
-    const shared = {
-      total_timesteps: pipelineTotalTimesteps,
-      snapshot_every_timesteps: pipelineSnapshotEvery,
-      seed: pipelineSeed,
-      episodes_per_seed: pipelineEpisodesPerSeed,
-      ...(pipelineLimitSweeps !== "" ? { limit_sweeps: Number(pipelineLimitSweeps) } : {}),
-    };
-
+  async function handleStartRsPipeline() {
     try {
-      if (isRS) {
-        const { pipeline_id } = await startMixedPipeline({
-          ...shared,
-          seeds: pipelineEvalSeeds,
-        });
-        setRsPipelineId(pipeline_id);
-        setRsPipelineStage("loading_config");
-        setRsPipelineError(null);
-        setRsPipelineReportId(null);
-      } else {
-        const seedList = Array.from({ length: pipelineEvalSeeds }, (_, i) => pipelineSeed + i);
-        const { pipeline_id } = await startCompetitivePipeline({
-          ...shared,
-          seeds: seedList,
-        });
-        setHhPipelineId(pipeline_id);
-        setHhPipelineStage("loading_config");
-        setHhPipelineError(null);
-        setHhPipelineReportId(null);
-      }
+      const { pipeline_id } = await startMixedPipeline({
+        total_timesteps: 50000,
+        snapshot_every_timesteps: 10000,
+        seed: 42,
+        episodes_per_seed: 2,
+        seeds: 3,
+      });
+      setRsPipelineId(pipeline_id);
+      setRsPipelineStage("loading_config");
+      setRsPipelineError(null);
+      setRsPipelineReportId(null);
     } catch (e) {
-      if (isRS) {
-        setRsPipelineError(String(e));
-      } else {
-        setHhPipelineError(String(e));
-      }
+      setRsPipelineError(String(e));
+    }
+  }
+
+  async function handleStartHhPipeline() {
+    try {
+      const seedList = Array.from({ length: 3 }, (_, i) => 42 + i);
+      const { pipeline_id } = await startCompetitivePipeline({
+        total_timesteps: 50000,
+        snapshot_every_timesteps: 10000,
+        seed: 42,
+        episodes_per_seed: 2,
+        seeds: seedList,
+      });
+      setHhPipelineId(pipeline_id);
+      setHhPipelineStage("loading_config");
+      setHhPipelineError(null);
+      setHhPipelineReportId(null);
+    } catch (e) {
+      setHhPipelineError(String(e));
     }
   }
 
@@ -980,6 +746,72 @@ export default function LeaguePage() {
         </p>
       </div>
 
+      {/* Pipeline panel — always visible */}
+      <div style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--bg-border)",
+        borderRadius: 8,
+        padding: "20px 24px",
+        marginBottom: 24,
+      }}>
+        {/* Header row */}
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}>
+          <div>
+            <p style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--text-primary)",
+              marginBottom: 4,
+            }}>Training Pipeline</p>
+            <p style={{
+              fontSize: 12,
+              color: "var(--text-secondary)",
+            }}>
+              Train PPO agents and grow the league automatically.
+              Runs for both archetypes independently.
+            </p>
+          </div>
+        </div>
+
+        {/* Two archetype pipeline sections side by side */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+        }}>
+          {/* Resource Sharing pipeline */}
+          <PipelinePanel
+            label="Resource Sharing"
+            accentColor="var(--accent)"
+            stage={rsPipelineStage}
+            error={rsPipelineError}
+            reportId={rsPipelineReportId}
+            onRun={handleStartRsPipeline}
+            running={rsPipelineStage !== null &&
+              rsPipelineStage !== "done" &&
+              rsPipelineStage !== "error"}
+          />
+
+          {/* Head-to-Head pipeline */}
+          <PipelinePanel
+            label="Head-to-Head"
+            accentColor="#f97316"
+            stage={hhPipelineStage}
+            error={hhPipelineError}
+            reportId={hhPipelineReportId}
+            onRun={handleStartHhPipeline}
+            running={hhPipelineStage !== null &&
+              hhPipelineStage !== "done" &&
+              hhPipelineStage !== "error"}
+          />
+        </div>
+      </div>
+
       {/* Archetype switcher */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", marginTop: "16px" }}>
         <button
@@ -1052,7 +884,7 @@ export default function LeaguePage() {
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--bg-border)", marginBottom: "32px" }}>
-        {(["ratings", "pipeline", "lineage", "champion", "evolution"] as Tab[]).map((t) => (
+        {(["ratings", "champion", "evolution"] as Tab[]).map((t) => (
           <button
             key={t}
             style={tab === t ? subTabActive : subTabInactive}
@@ -1134,36 +966,6 @@ export default function LeaguePage() {
                 )
               )}
 
-              {/* Pipeline tab */}
-              {tab === "pipeline" && (
-                <PipelineTabContent
-                  pipelineId={rsPipelineId}
-                  pipelineStage={rsPipelineStage}
-                  pipelineError={rsPipelineError}
-                  pipelineReportId={rsPipelineReportId}
-                  totalTimesteps={pipelineTotalTimesteps}
-                  setTotalTimesteps={setPipelineTotalTimesteps}
-                  snapshotEvery={pipelineSnapshotEvery}
-                  setSnapshotEvery={setPipelineSnapshotEvery}
-                  seed={pipelineSeed}
-                  setSeed={setPipelineSeed}
-                  advanced={pipelineAdvanced}
-                  setAdvanced={setPipelineAdvanced}
-                  evalSeeds={pipelineEvalSeeds}
-                  setEvalSeeds={setPipelineEvalSeeds}
-                  episodesPerSeed={pipelineEpisodesPerSeed}
-                  setEpisodesPerSeed={setPipelineEpisodesPerSeed}
-                  limitSweeps={pipelineLimitSweeps}
-                  setLimitSweeps={setPipelineLimitSweeps}
-                  onRun={handleStartPipeline}
-                  onSwitchToRatings={() => setTab("ratings")}
-                />
-              )}
-
-              {/* Lineage tab */}
-              {tab === "lineage" && (
-                <LeagueLineage members={rsLineageMembers} />
-              )}
 
               {/* Champion tab */}
               {tab === "champion" && (
@@ -1281,48 +1083,6 @@ export default function LeaguePage() {
                   </table>
                 ))}
 
-              {/* Pipeline tab */}
-              {tab === "pipeline" && (
-                <PipelineTabContent
-                  pipelineId={hhPipelineId}
-                  pipelineStage={hhPipelineStage}
-                  pipelineError={hhPipelineError}
-                  pipelineReportId={hhPipelineReportId}
-                  totalTimesteps={pipelineTotalTimesteps}
-                  setTotalTimesteps={setPipelineTotalTimesteps}
-                  snapshotEvery={pipelineSnapshotEvery}
-                  setSnapshotEvery={setPipelineSnapshotEvery}
-                  seed={pipelineSeed}
-                  setSeed={setPipelineSeed}
-                  advanced={pipelineAdvanced}
-                  setAdvanced={setPipelineAdvanced}
-                  evalSeeds={pipelineEvalSeeds}
-                  setEvalSeeds={setPipelineEvalSeeds}
-                  episodesPerSeed={pipelineEpisodesPerSeed}
-                  setEpisodesPerSeed={setPipelineEpisodesPerSeed}
-                  limitSweeps={pipelineLimitSweeps}
-                  setLimitSweeps={setPipelineLimitSweeps}
-                  onRun={handleStartPipeline}
-                  onSwitchToRatings={() => setTab("ratings")}
-                />
-              )}
-
-              {/* Lineage tab */}
-              {tab === "lineage" && (
-                <div>
-                  <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)" }}>Lineage Graph</h3>
-                  <LineageGraph nodes={hhEvolutionData.members.map(m => ({
-                    id: m.member_id,
-                    parent_id: m.parent_id,
-                    rating: m.rating,
-                    label: m.strategy?.label,
-                    cluster: m.strategy?.cluster_id,
-                    robustness: m.robustness_score,
-                    created_at: m.created_at,
-                    notes: m.notes,
-                  }))} />
-                </div>
-              )}
 
               {/* Champion tab */}
               {tab === "champion" && (
