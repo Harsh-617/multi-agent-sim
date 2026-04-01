@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,40 @@ REPORTS_DIR = REPORTS_ROOT
 _registry = LeagueRegistry(LEAGUE_ROOT)
 
 _DEFAULT_RATING = 1000.0
+
+
+# ------------------------------------------------------------------
+# Robustness manager (mirrors PipelineManager pattern)
+# ------------------------------------------------------------------
+
+
+class RobustnessManager:
+    """Process-wide robustness evaluation state."""
+
+    def __init__(self) -> None:
+        self.robustness_id: str | None = None
+        self.running: bool = False
+        self.stage: str = "idle"
+        self.error: str | None = None
+        self.report_id: str | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    def attach_task(self, task: asyncio.Task[None]) -> None:
+        self._task = task
+
+    def reset_state(self) -> None:
+        self.robustness_id = None
+        self.running = False
+        self.stage = "idle"
+        self.error = None
+        self.report_id = None
+        self._task = None
+
+    def set_stage(self, stage: str, detail: str = "") -> None:
+        self.stage = stage
+
+
+robustness_manager = RobustnessManager()
 
 
 # ------------------------------------------------------------------
@@ -492,69 +527,131 @@ async def get_evolution() -> dict:
 # ------------------------------------------------------------------
 
 
+async def _run_robustness_task(
+    rm: RobustnessManager,
+    robustness_id: str,
+    req: ChampionRobustnessRequest,
+) -> None:
+    """Run robustness evaluation in thread-pool executor."""
+    loop = asyncio.get_running_loop()
+    rm.running = True
+    rm.robustness_id = robustness_id
+    rm.stage = "loading_config"
+
+    try:
+        # 1. Load config
+        if req.config_id == "default":
+            config = default_config()
+            config_dict = json.loads(config.model_dump_json())
+        else:
+            config_path = CONFIGS_DIR / f"{req.config_id}.json"
+            if not config_path.exists():
+                raise FileNotFoundError(f"Config '{req.config_id}' not found.")
+            raw = config_path.read_text(encoding="utf-8")
+            config = MixedEnvironmentConfig.model_validate_json(raw)
+            config_dict = json.loads(raw)
+
+        # 2. Find champion
+        members = _registry.list_members()
+        if not members:
+            raise ValueError("No league members exist.")
+        ratings = _ratings_map()
+        champ = _find_champion(members, ratings)
+        if champ is None:
+            raise ValueError("No league members exist.")
+
+        # 3. Build policy set
+        specs = resolve_policy_set(
+            league_root=LEAGUE_ROOT,
+            ratings_path=RATINGS_PATH,
+            ppo_dir=PPO_AGENT_DIR,
+            top_k=0,
+        )
+
+        # 4. Build and optionally cap sweeps
+        sweeps = build_default_sweeps()
+        if req.limit_sweeps is not None:
+            sweeps = sweeps[: req.limit_sweeps]
+
+        # 5. Derive seed list
+        seeds = [req.seed + i for i in range(req.seeds)]
+
+        # 6. Run robustness evaluation
+        rm.stage = "evaluating"
+        result = await loop.run_in_executor(
+            None,
+            lambda: evaluate_robustness(
+                config,
+                specs,
+                sweeps,
+                seeds=seeds,
+                episodes_per_seed=req.episodes_per_seed,
+                max_steps_override=req.max_steps,
+            ),
+        )
+
+        # 7. Persist report
+        rm.stage = "writing_report"
+        report_dir = await loop.run_in_executor(
+            None,
+            lambda: write_robustness_report(
+                result,
+                config_dict=config_dict,
+                report_root=REPORTS_ROOT,
+            ),
+        )
+
+        rm.report_id = report_dir.name
+        rm.stage = "done"
+    except Exception as exc:  # noqa: BLE001
+        rm.error = str(exc)
+        rm.stage = "error"
+    finally:
+        rm.running = False
+
+
 @router.post("/champion/robustness")
 async def champion_robustness(req: ChampionRobustnessRequest) -> dict:
-    """Run a robustness sweep for the league champion and save a report.
+    """Start a robustness sweep for the league champion in the background.
 
-    Returns the report_id (folder name) and report_path so the caller
-    can navigate to /reports/{report_id}.
+    Returns ``{ robustness_id }`` immediately; poll the status endpoint.
     """
-    # 1. Load config
-    if req.config_id == "default":
-        config = default_config()
-        config_dict = json.loads(config.model_dump_json())
-    else:
-        config_path = CONFIGS_DIR / f"{req.config_id}.json"
-        if not config_path.exists():
-            raise HTTPException(
-                status_code=404, detail=f"Config '{req.config_id}' not found."
-            )
-        raw = config_path.read_text(encoding="utf-8")
-        config = MixedEnvironmentConfig.model_validate_json(raw)
-        config_dict = json.loads(raw)
+    if robustness_manager.running:
+        raise HTTPException(
+            status_code=409, detail="A robustness evaluation is already running."
+        )
 
-    # 2. Find champion (uses _DEFAULT_RATING if ratings file is absent)
-    members = _registry.list_members()
-    if not members:
-        raise HTTPException(status_code=404, detail="No league members exist.")
-    ratings = _ratings_map()
-    champ = _find_champion(members, ratings)
-    if champ is None:
-        raise HTTPException(status_code=404, detail="No league members exist.")
+    robustness_id = uuid.uuid4().hex[:12]
+    robustness_manager.reset_state()
+    robustness_manager.robustness_id = robustness_id
 
-    # 3. Build policy set: champion + baselines + ppo_shared (top_k=0
-    #    avoids duplicate top-k entries; champion is included separately)
-    specs = resolve_policy_set(
-        league_root=LEAGUE_ROOT,
-        ratings_path=RATINGS_PATH,
-        ppo_dir=PPO_AGENT_DIR,
-        top_k=0,
+    task = asyncio.create_task(
+        _run_robustness_task(robustness_manager, robustness_id, req)
     )
+    robustness_manager.attach_task(task)
 
-    # 4. Build and optionally cap sweeps
-    sweeps = build_default_sweeps()
-    if req.limit_sweeps is not None:
-        sweeps = sweeps[: req.limit_sweeps]
+    await asyncio.sleep(0)
 
-    # 5. Derive seed list from base seed
-    seeds = [req.seed + i for i in range(req.seeds)]
+    return {"robustness_id": robustness_id}
 
-    # 6. Run robustness evaluation
-    result = await asyncio.to_thread(
-        evaluate_robustness,
-        config,
-        specs,
-        sweeps,
-        seeds=seeds,
-        episodes_per_seed=req.episodes_per_seed,
-        max_steps_override=req.max_steps,
-    )
 
-    # 7. Persist report
-    report_dir = write_robustness_report(
-        result,
-        config_dict=config_dict,
-        report_root=REPORTS_ROOT,
-    )
+@router.get("/champion/robustness/{robustness_id}/status")
+async def robustness_status(robustness_id: str) -> dict:
+    """Return the current status of a robustness evaluation."""
+    if robustness_manager.robustness_id != robustness_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Robustness run '{robustness_id}' not found.",
+        )
 
-    return {"report_id": report_dir.name, "report_path": str(report_dir)}
+    response: dict[str, Any] = {
+        "robustness_id": robustness_id,
+        "running": robustness_manager.running,
+        "stage": robustness_manager.stage,
+    }
+    if robustness_manager.error is not None:
+        response["error"] = robustness_manager.error
+    if robustness_manager.report_id is not None:
+        response["report_id"] = robustness_manager.report_id
+
+    return response

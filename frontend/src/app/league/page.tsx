@@ -29,6 +29,7 @@ import {
   recomputeCompetitiveLeagueRatings,
   runCompetitiveChampionBenchmark,
   runCompetitiveChampionRobustness,
+  getCompetitiveRobustnessStatus,
   startCompetitiveLeagueMemberRun,
   startMixedPipeline,
   getMixedPipelineStatus,
@@ -481,6 +482,9 @@ export default function LeaguePage() {
   const [hhRobLimitSweeps, setHhRobLimitSweeps] = useState<string>("");
   const [hhRobSeed, setHhRobSeed] = useState(42);
   const [hhRobRunning, setHhRobRunning] = useState(false);
+  const [hhRobId, setHhRobId] = useState<string | null>(null);
+  const [hhRobStage, setHhRobStage] = useState<string | null>(null);
+  const [hhRobReportId, setHhRobReportId] = useState<string | null>(null);
 
   // Recompute feedback state (per archetype so only one message shows)
   const [rsRecomputeStatus, setRsRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
@@ -663,6 +667,9 @@ export default function LeaguePage() {
   async function handleHhRobustness() {
     setHhRobRunning(true);
     setHhError(null);
+    setHhRobId(null);
+    setHhRobStage(null);
+    setHhRobReportId(null);
     try {
       const payload: CompetitiveChampionRobustnessRequest = {
         config_id: hhRobConfigId,
@@ -674,7 +681,8 @@ export default function LeaguePage() {
           : {}),
       };
       const resp = await runCompetitiveChampionRobustness(payload);
-      router.push(`/research/${encodeURIComponent(resp.report_id)}`);
+      setHhRobId(resp.robustness_id);
+      setHhRobStage("loading_config");
     } catch (e) {
       setHhError(String(e));
       setHhRobRunning(false);
@@ -754,6 +762,29 @@ export default function LeaguePage() {
     }, 2000);
     return () => clearInterval(interval);
   }, [hhPipelineId, hhPipelineStage]);
+
+  // Competitive robustness polling
+  useEffect(() => {
+    if (!hhRobId || hhRobStage === "done" || hhRobStage === "error") return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getCompetitiveRobustnessStatus(hhRobId);
+        setHhRobStage(status.stage);
+        if (status.error) {
+          setHhError(status.error);
+          setHhRobRunning(false);
+        }
+        if (status.report_id) setHhRobReportId(status.report_id);
+        if (status.stage === "done" || status.stage === "error") {
+          setHhRobRunning(false);
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [hhRobId, hhRobStage]);
 
   // --- Derived values ---
   const isRS = archetype === "resource-sharing";
@@ -1422,9 +1453,23 @@ export default function LeaguePage() {
                       </button>
                     </div>
 
-                    {hhRobRunning && (
+                    {hhRobRunning && hhRobStage && (
                       <p className="text-sm text-gray-500 mt-2">
-                        Running robustness sweep &mdash; this may take a moment...
+                        {hhRobStage === "loading_config" && "Loading configuration..."}
+                        {hhRobStage === "evaluating" && "Running robustness sweeps..."}
+                        {hhRobStage === "writing_report" && "Generating report..."}
+                      </p>
+                    )}
+
+                    {hhRobStage === "done" && hhRobReportId && (
+                      <p className="text-sm text-green-600 mt-2">
+                        Complete!{" "}
+                        <a
+                          href={`/research/${encodeURIComponent(hhRobReportId)}`}
+                          className="underline font-medium"
+                        >
+                          View report &rarr;
+                        </a>
                       </p>
                     )}
                   </div>

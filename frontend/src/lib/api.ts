@@ -357,8 +357,15 @@ export interface ChampionRobustnessRequest {
 }
 
 export interface ChampionRobustnessResponse {
-  report_id: string;
-  report_path: string;
+  robustness_id: string;
+}
+
+export interface RobustnessStatusResponse {
+  robustness_id: string;
+  running: boolean;
+  stage: string;
+  error?: string;
+  report_id?: string;
 }
 
 export function runChampionRobustness(
@@ -369,6 +376,14 @@ export function runChampionRobustness(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function getMixedRobustnessStatus(
+  robustnessId: string,
+): Promise<RobustnessStatusResponse> {
+  return json(
+    `${BASE}/league/champion/robustness/${encodeURIComponent(robustnessId)}/status`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -649,8 +664,7 @@ export interface CompetitiveChampionRobustnessRequest {
 }
 
 export interface CompetitiveChampionRobustnessResponse {
-  report_id: string;
-  report_path: string;
+  robustness_id: string;
 }
 
 export function runCompetitiveChampionRobustness(
@@ -661,6 +675,14 @@ export function runCompetitiveChampionRobustness(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function getCompetitiveRobustnessStatus(
+  robustnessId: string,
+): Promise<RobustnessStatusResponse> {
+  return json(
+    `${BASE}/competitive/league/champion/robustness/${encodeURIComponent(robustnessId)}/status`,
+  );
 }
 
 // Start competitive league member run

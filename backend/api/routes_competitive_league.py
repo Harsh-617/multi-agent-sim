@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from itertools import combinations
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,40 @@ REPORTS_ROOT = STORAGE_ROOT / "reports"
 _registry = LeagueRegistry(LEAGUE_ROOT)
 
 _DEFAULT_RATING = 1000.0
+
+
+# ------------------------------------------------------------------
+# Robustness manager (mirrors PipelineManager pattern)
+# ------------------------------------------------------------------
+
+
+class CompetitiveRobustnessManager:
+    """Process-wide competitive robustness evaluation state."""
+
+    def __init__(self) -> None:
+        self.robustness_id: str | None = None
+        self.running: bool = False
+        self.stage: str = "idle"
+        self.error: str | None = None
+        self.report_id: str | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    def attach_task(self, task: asyncio.Task[None]) -> None:
+        self._task = task
+
+    def reset_state(self) -> None:
+        self.robustness_id = None
+        self.running = False
+        self.stage = "idle"
+        self.error = None
+        self.report_id = None
+        self._task = None
+
+    def set_stage(self, stage: str, detail: str = "") -> None:
+        self.stage = stage
+
+
+competitive_robustness_manager = CompetitiveRobustnessManager()
 
 
 # ------------------------------------------------------------------
@@ -603,58 +638,122 @@ class ChampionRobustnessRequest(BaseModel):
     seed: int = Field(default=42)
 
 
-@router.post("/champion/robustness")
-async def champion_robustness(req: ChampionRobustnessRequest) -> dict:
-    """Run a robustness sweep for the competitive league champion.
+async def _run_competitive_robustness_task(
+    rm: CompetitiveRobustnessManager,
+    robustness_id: str,
+    req: ChampionRobustnessRequest,
+) -> None:
+    """Run competitive robustness evaluation in thread-pool executor."""
+    loop = asyncio.get_running_loop()
+    rm.running = True
+    rm.robustness_id = robustness_id
+    rm.stage = "loading_config"
 
-    Returns the report_id and report_path.
-    """
-    # Load config
-    if req.config_id == "default":
-        config = default_competitive_config(seed=req.seed)
-    else:
-        config_path = CONFIGS_DIR / f"{req.config_id}.json"
-        if not config_path.exists():
-            raise HTTPException(
-                status_code=404, detail=f"Config '{req.config_id}' not found."
+    try:
+        # Load config
+        if req.config_id == "default":
+            config = default_competitive_config(seed=req.seed)
+        else:
+            config_path = CONFIGS_DIR / f"{req.config_id}.json"
+            if not config_path.exists():
+                raise FileNotFoundError(f"Config '{req.config_id}' not found.")
+            config = CompetitiveEnvironmentConfig.model_validate_json(
+                config_path.read_text(encoding="utf-8")
             )
-        config = CompetitiveEnvironmentConfig.model_validate_json(
-            config_path.read_text(encoding="utf-8")
+
+        # Find champion
+        members = _registry.list_members()
+        if not members:
+            raise ValueError("No competitive league members exist.")
+        ratings = _ratings_map()
+        champ = _find_champion(members, ratings)
+        if champ is None:
+            raise ValueError("No competitive league members exist.")
+
+        # Build policy set
+        specs = get_competitive_policy_specs(
+            league_root=LEAGUE_ROOT,
+            ppo_dir=COMPETITIVE_PPO_DIR,
+            top_k=0,
         )
 
-    # Find champion
-    members = _registry.list_members()
-    if not members:
-        raise HTTPException(status_code=404, detail="No competitive league members exist.")
-    ratings = _ratings_map()
-    champ = _find_champion(members, ratings)
-    if champ is None:
-        raise HTTPException(status_code=404, detail="No competitive league members exist.")
+        # Build and optionally cap sweeps
+        from simulation.evaluation.competitive_sweeps import build_competitive_default_sweeps
+        sweeps = build_competitive_default_sweeps(config)
+        if req.limit_sweeps is not None:
+            sweeps = sweeps[: req.limit_sweeps]
 
-    # Build policy set
-    specs = get_competitive_policy_specs(
-        league_root=LEAGUE_ROOT,
-        ppo_dir=COMPETITIVE_PPO_DIR,
-        top_k=0,
+        # Run robustness evaluation
+        rm.stage = "evaluating"
+        result = await loop.run_in_executor(
+            None,
+            lambda: run_competitive_robustness(
+                config,
+                specs,
+                req.seeds,
+                episodes_per_seed=req.episodes_per_seed,
+                sweeps=sweeps,
+            ),
+        )
+
+        # Persist report
+        rm.stage = "writing_report"
+        report_dir = await loop.run_in_executor(
+            None,
+            lambda: write_competitive_report(result),
+        )
+
+        rm.report_id = report_dir.name
+        rm.stage = "done"
+    except Exception as exc:  # noqa: BLE001
+        rm.error = str(exc)
+        rm.stage = "error"
+    finally:
+        rm.running = False
+
+
+@router.post("/champion/robustness")
+async def champion_robustness(req: ChampionRobustnessRequest) -> dict:
+    """Start a competitive robustness sweep in the background.
+
+    Returns ``{ robustness_id }`` immediately; poll the status endpoint.
+    """
+    if competitive_robustness_manager.running:
+        raise HTTPException(
+            status_code=409, detail="A competitive robustness evaluation is already running."
+        )
+
+    robustness_id = uuid.uuid4().hex[:12]
+    competitive_robustness_manager.reset_state()
+    competitive_robustness_manager.robustness_id = robustness_id
+
+    task = asyncio.create_task(
+        _run_competitive_robustness_task(competitive_robustness_manager, robustness_id, req)
     )
+    competitive_robustness_manager.attach_task(task)
 
-    # Build and optionally cap sweeps
-    from simulation.evaluation.competitive_sweeps import build_competitive_default_sweeps
-    sweeps = build_competitive_default_sweeps(config)
-    if req.limit_sweeps is not None:
-        sweeps = sweeps[: req.limit_sweeps]
+    await asyncio.sleep(0)
 
-    # Run robustness evaluation
-    result = await asyncio.to_thread(
-        run_competitive_robustness,
-        config,
-        specs,
-        req.seeds,
-        episodes_per_seed=req.episodes_per_seed,
-        sweeps=sweeps,
-    )
+    return {"robustness_id": robustness_id}
 
-    # Persist report
-    report_dir = write_competitive_report(result)
 
-    return {"report_id": report_dir.name, "report_path": str(report_dir)}
+@router.get("/champion/robustness/{robustness_id}/status")
+async def competitive_robustness_status(robustness_id: str) -> dict:
+    """Return the current status of a competitive robustness evaluation."""
+    if competitive_robustness_manager.robustness_id != robustness_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Competitive robustness run '{robustness_id}' not found.",
+        )
+
+    response: dict[str, Any] = {
+        "robustness_id": robustness_id,
+        "running": competitive_robustness_manager.running,
+        "stage": competitive_robustness_manager.stage,
+    }
+    if competitive_robustness_manager.error is not None:
+        response["error"] = competitive_robustness_manager.error
+    if competitive_robustness_manager.report_id is not None:
+        response["report_id"] = competitive_robustness_manager.report_id
+
+    return response

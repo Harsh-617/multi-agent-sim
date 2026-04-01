@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   ConfigListItem,
   ChampionRobustnessRequest,
   runChampionRobustness,
+  getMixedRobustnessStatus,
 } from "@/lib/api";
+
+const STAGE_LABELS: Record<string, string> = {
+  loading_config: "Loading configuration...",
+  evaluating: "Running robustness sweeps...",
+  writing_report: "Generating report...",
+  done: "Complete!",
+};
 
 interface Props {
   configs: ConfigListItem[];
 }
 
 export default function ChampionRobustness({ configs }: Props) {
-  const router = useRouter();
   const [configId, setConfigId] = useState(configs[0]?.config_id ?? "default");
   const [seeds, setSeeds] = useState(3);
   const [episodesPerSeed, setEpisodesPerSeed] = useState(2);
@@ -23,9 +29,41 @@ export default function ChampionRobustness({ configs }: Props) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [robustnessId, setRobustnessId] = useState<string | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const [reportId, setReportId] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll for status when robustnessId is set and not done/error
+  useEffect(() => {
+    if (!robustnessId || stage === "done" || stage === "error") return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getMixedRobustnessStatus(robustnessId);
+        setStage(status.stage);
+        if (status.error) {
+          setError(status.error);
+          setRunning(false);
+        }
+        if (status.report_id) setReportId(status.report_id);
+        if (status.stage === "done" || status.stage === "error") {
+          setRunning(false);
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
+      }
+    }, 2000);
+    intervalRef.current = interval;
+    return () => clearInterval(interval);
+  }, [robustnessId, stage]);
+
   async function handleRun() {
     setRunning(true);
     setError(null);
+    setRobustnessId(null);
+    setStage(null);
+    setReportId(null);
     try {
       const payload: ChampionRobustnessRequest = {
         config_id: configId,
@@ -36,7 +74,8 @@ export default function ChampionRobustness({ configs }: Props) {
         ...(limitSweeps !== "" ? { limit_sweeps: Number(limitSweeps) } : {}),
       };
       const resp = await runChampionRobustness(payload);
-      router.push(`/reports/${resp.report_id}`);
+      setRobustnessId(resp.robustness_id);
+      setStage("loading_config");
     } catch (e) {
       setError(String(e));
       setRunning(false);
@@ -142,9 +181,21 @@ export default function ChampionRobustness({ configs }: Props) {
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      {running && (
+      {running && stage && (
         <p className="text-sm text-gray-500">
-          Running robustness sweep — this may take a moment...
+          {STAGE_LABELS[stage] ?? stage}
+        </p>
+      )}
+
+      {stage === "done" && reportId && (
+        <p className="text-sm text-green-600">
+          Complete!{" "}
+          <a
+            href={`/research/${encodeURIComponent(reportId)}`}
+            className="underline font-medium"
+          >
+            View report &rarr;
+          </a>
         </p>
       )}
     </div>
