@@ -18,15 +18,22 @@ interface Props {
 }
 
 const COLORS = [
-  "#2563eb", "#dc2626", "#16a34a", "#9333ea",
-  "#ea580c", "#0891b2", "#ca8a04", "#be185d",
+  "#14b8a6", // teal
+  "#f97316", // orange
+  "#8b5cf6", // purple
+  "#22c55e", // green
+  "#ef4444", // red
+  "#f59e0b", // amber
+  "#3b82f6", // blue
+  "#ec4899", // pink
 ];
 
 export default function RobustScatter({ perPolicyRobustness }: Props) {
   const entries = Object.values(perPolicyRobustness).filter(
     (p) => p.n_sweeps_evaluated > 0
   );
-  if (entries.length === 0) return <p className="text-gray-500">No data.</p>;
+  if (entries.length === 0)
+    return <p style={{ color: "#666666" }}>No data.</p>;
 
   const pad = { top: 30, right: 30, bottom: 50, left: 70 };
   const w = 500;
@@ -44,15 +51,50 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
   const scaleX = (v: number) => pad.left + ((v - xMin) / (xMax - xMin)) * plotW;
   const scaleY = (v: number) => pad.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
+  const fmt = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
+
+  // Tick values
+  const xTicks = Array.from({ length: 4 }, (_, i) => xMin + (i * (xMax - xMin)) / 3);
+  const yTicks = Array.from({ length: 4 }, (_, i) => yMin + (i * (yMax - yMin)) / 3);
+
+  // Grid positions (4 lines each)
+  const hGridLines = Array.from({ length: 4 }, (_, i) => pad.top + (i * plotH) / 3);
+  const vGridLines = Array.from({ length: 4 }, (_, i) => pad.left + (i * plotW) / 3);
+
   return (
-    <div className="overflow-x-auto">
-      <svg width={w} height={h} className="font-mono text-xs">
+    <div style={{ overflowX: "auto" }}>
+      <svg width={w} height={h}>
+        {/* Background */}
+        <rect width={w} height={h} fill="#0d0d0d" />
+
+        {/* Grid lines */}
+        {hGridLines.map((y, i) => (
+          <line key={`hg${i}`} x1={pad.left} y1={y} x2={pad.left + plotW} y2={y} stroke="#1e1e1e" strokeWidth={1} />
+        ))}
+        {vGridLines.map((x, i) => (
+          <line key={`vg${i}`} x1={x} y1={pad.top} x2={x} y2={pad.top + plotH} stroke="#1e1e1e" strokeWidth={1} />
+        ))}
+
         {/* Axes */}
-        <line x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top + plotH} stroke="#ccc" />
-        <line x1={pad.left} y1={pad.top + plotH} x2={pad.left + plotW} y2={pad.top + plotH} stroke="#ccc" />
+        <line x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top + plotH} stroke="#2a2a2a" strokeWidth={1} />
+        <line x1={pad.left} y1={pad.top + plotH} x2={pad.left + plotW} y2={pad.top + plotH} stroke="#2a2a2a" strokeWidth={1} />
+
+        {/* X axis ticks */}
+        {xTicks.map((v, i) => (
+          <text key={`xt${i}`} x={scaleX(v)} y={pad.top + plotH + 16} textAnchor="middle" fontSize={9} fill="#444444" fontFamily="monospace">
+            {fmt(v)}
+          </text>
+        ))}
+
+        {/* Y axis ticks */}
+        {yTicks.map((v, i) => (
+          <text key={`yt${i}`} x={pad.left - 8} y={scaleY(v) + 3} textAnchor="end" fontSize={9} fill="#444444" fontFamily="monospace">
+            {fmt(v)}
+          </text>
+        ))}
 
         {/* Axis labels */}
-        <text x={pad.left + plotW / 2} y={h - 8} textAnchor="middle" fontSize={11}>
+        <text x={pad.left + plotW / 2} y={h - 8} textAnchor="middle" fontSize={11} fill="#666666" fontFamily="monospace">
           Overall Mean Reward
         </text>
         <text
@@ -60,6 +102,8 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
           y={pad.top + plotH / 2}
           textAnchor="middle"
           fontSize={11}
+          fill="#666666"
+          fontFamily="monospace"
           transform={`rotate(-90,14,${pad.top + plotH / 2})`}
         >
           Worst-Case Mean Reward
@@ -71,8 +115,8 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
           y1={scaleY(Math.max(xMin, yMin))}
           x2={scaleX(Math.min(xMax, yMax))}
           y2={scaleY(Math.min(xMax, yMax))}
-          stroke="#e5e7eb"
-          strokeDasharray="4,4"
+          stroke="#2a2a2a"
+          strokeDasharray="3,3"
         />
 
         {/* Points */}
@@ -80,10 +124,44 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
           const cx = scaleX(e.overall_mean_reward);
           const cy = scaleY(e.worst_case_mean_reward);
           const color = COLORS[i % COLORS.length];
+
+          // Smart label placement
+          const inRightZone = cx > pad.left + plotW * 0.7;
+          const inTopZone = cy < pad.top + plotH * 0.2;
+
+          const labelX = inRightZone ? cx - 10 : cx + 10;
+          const labelY = inTopZone ? cy + 16 : cy;
+          const anchor = inRightZone ? "end" : "start";
+          const labelW = e.policy_name.length * 6;
+          const bgX = inRightZone ? labelX - labelW - 2 : labelX - 2;
+
           return (
             <g key={e.policy_name}>
-              <circle cx={cx} cy={cy} r={6} fill={color} opacity={0.85} />
-              <text x={cx + 9} y={cy + 4} fontSize={10} fill={color}>
+              {/* Hit area */}
+              <circle cx={cx} cy={cy} r={12} fill="transparent" />
+              {/* Glow ring */}
+              <circle cx={cx} cy={cy} r={7} fill="none" stroke={color} strokeWidth={1} opacity={0.3} />
+              {/* Point */}
+              <circle cx={cx} cy={cy} r={5} fill={color} opacity={0.9} />
+              {/* Label background */}
+              <rect x={bgX} y={labelY - 10} width={labelW + 4} height={14} fill="#0d0d0d" opacity={0.85} />
+              {/* Label text */}
+              <text x={labelX} y={labelY} fontSize={10} fill={color} fontFamily="monospace" textAnchor={anchor}>
+                {e.policy_name}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Legend */}
+        {entries.map((e, i) => {
+          const color = COLORS[i % COLORS.length];
+          const lx = pad.left + plotW - 100;
+          const ly = pad.top + 10 + i * 14;
+          return (
+            <g key={`legend-${e.policy_name}`}>
+              <circle cx={lx} cy={ly} r={4} fill={color} />
+              <text x={lx + 8} y={ly + 3} fontSize={9} fill="#888888" fontFamily="monospace">
                 {e.policy_name}
               </text>
             </g>
