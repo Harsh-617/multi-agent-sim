@@ -6,6 +6,7 @@ import {
   ChampionRobustnessRequest,
   runChampionRobustness,
   getMixedRobustnessStatus,
+  getConfigDetail,
 } from "@/lib/api";
 
 const STAGE_LABELS: Record<string, string> = {
@@ -17,10 +18,14 @@ const STAGE_LABELS: Record<string, string> = {
 
 interface Props {
   configs: ConfigListItem[];
+  archetypeFilter?: "mixed" | "competitive";
 }
 
-export default function ChampionRobustness({ configs }: Props) {
-  const [configId, setConfigId] = useState(configs[0]?.config_id ?? "default");
+export default function ChampionRobustness({ configs, archetypeFilter }: Props) {
+  const [filteredConfigs, setFilteredConfigs] = useState<ConfigListItem[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+
+  const [configId, setConfigId] = useState("");
   const [seeds, setSeeds] = useState(3);
   const [episodesPerSeed, setEpisodesPerSeed] = useState(2);
   const [maxSteps, setMaxSteps] = useState<string>("");
@@ -33,6 +38,48 @@ export default function ChampionRobustness({ configs }: Props) {
   const [stage, setStage] = useState<string | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Filter configs by archetype using config detail endpoint
+  useEffect(() => {
+    if (!archetypeFilter) {
+      setFilteredConfigs(configs);
+      if (configs.length > 0 && !configId) {
+        setConfigId(archetypeFilter === "mixed" ? "default" : configs[0].config_id);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    async function filterConfigs() {
+      setLoadingConfigs(true);
+      const results: ConfigListItem[] = [];
+      for (const c of configs) {
+        try {
+          const detail = await getConfigDetail(c.config_id);
+          const identity = detail.identity as Record<string, unknown> | undefined;
+          const envType = identity?.environment_type;
+          if (envType === archetypeFilter) {
+            results.push(c);
+          }
+        } catch {
+          // skip configs we can't fetch
+        }
+      }
+      if (!cancelled) {
+        setFilteredConfigs(results);
+        // Set default selection
+        if (archetypeFilter === "mixed") {
+          setConfigId("default");
+        } else if (results.length > 0) {
+          setConfigId(results[0].config_id);
+        }
+        setLoadingConfigs(false);
+      }
+    }
+
+    filterConfigs();
+    return () => { cancelled = true; };
+  }, [configs, archetypeFilter]);
 
   // Poll for status when robustnessId is set and not done/error
   useEffect(() => {
@@ -82,6 +129,8 @@ export default function ChampionRobustness({ configs }: Props) {
     }
   }
 
+  const showDefault = archetypeFilter === "mixed" || !archetypeFilter;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
@@ -92,18 +141,22 @@ export default function ChampionRobustness({ configs }: Props) {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Config</label>
-          <select
-            value={configId}
-            onChange={(e) => setConfigId(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="default">default</option>
-            {configs.map((c) => (
-              <option key={c.config_id} value={c.config_id}>
-                {c.config_id} (agents={c.num_agents}, steps={c.max_steps})
-              </option>
-            ))}
-          </select>
+          {loadingConfigs ? (
+            <span className="text-xs text-gray-400">Loading configs...</span>
+          ) : (
+            <select
+              value={configId}
+              onChange={(e) => setConfigId(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              {showDefault && <option value="default">default</option>}
+              {filteredConfigs.map((c) => (
+                <option key={c.config_id} value={c.config_id}>
+                  {c.config_id} (agents={c.num_agents}, steps={c.max_steps})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
@@ -172,7 +225,7 @@ export default function ChampionRobustness({ configs }: Props) {
 
         <button
           onClick={handleRun}
-          disabled={running}
+          disabled={running || loadingConfigs}
           className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm disabled:opacity-50"
         >
           {running ? "Running..." : "Run Robustness"}

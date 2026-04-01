@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ConfigListItem,
   ChampionBenchmarkResponse,
   ChampionBenchmarkResult,
   runChampionBenchmark,
+  getConfigDetail,
 } from "@/lib/api";
 
 interface Props {
   configs: ConfigListItem[];
+  archetypeFilter?: "mixed" | "competitive";
 }
 
 const BAR_COLORS: Record<string, string> = {
@@ -79,12 +81,54 @@ function BarChart({ results }: { results: ChampionBenchmarkResult[] }) {
   );
 }
 
-export default function ChampionBenchmark({ configs }: Props) {
-  const [configId, setConfigId] = useState(configs[0]?.config_id ?? "");
+export default function ChampionBenchmark({ configs, archetypeFilter }: Props) {
+  const [filteredConfigs, setFilteredConfigs] = useState<ConfigListItem[]>([]);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+
+  const [configId, setConfigId] = useState("");
   const [episodes, setEpisodes] = useState(5);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ChampionBenchmarkResponse | null>(null);
+
+  // Filter configs by archetype
+  useEffect(() => {
+    if (!archetypeFilter) {
+      setFilteredConfigs(configs);
+      if (configs.length > 0 && !configId) {
+        setConfigId(configs[0].config_id);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    async function filterConfigs() {
+      setLoadingConfigs(true);
+      const results: ConfigListItem[] = [];
+      for (const c of configs) {
+        try {
+          const detail = await getConfigDetail(c.config_id);
+          const identity = detail.identity as Record<string, unknown> | undefined;
+          const envType = identity?.environment_type;
+          if (envType === archetypeFilter) {
+            results.push(c);
+          }
+        } catch {
+          // skip configs we can't fetch
+        }
+      }
+      if (!cancelled) {
+        setFilteredConfigs(results);
+        if (results.length > 0 && !configId) {
+          setConfigId(results[0].config_id);
+        }
+        setLoadingConfigs(false);
+      }
+    }
+
+    filterConfigs();
+    return () => { cancelled = true; };
+  }, [configs, archetypeFilter]);
 
   async function handleRun() {
     if (!configId) {
@@ -109,17 +153,21 @@ export default function ChampionBenchmark({ configs }: Props) {
       <div className="flex items-end gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Config</label>
-          <select
-            value={configId}
-            onChange={(e) => setConfigId(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            {configs.map((c) => (
-              <option key={c.config_id} value={c.config_id}>
-                {c.config_id} (agents={c.num_agents}, steps={c.max_steps})
-              </option>
-            ))}
-          </select>
+          {loadingConfigs ? (
+            <span className="text-xs text-gray-400">Loading configs...</span>
+          ) : (
+            <select
+              value={configId}
+              onChange={(e) => setConfigId(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              {filteredConfigs.map((c) => (
+                <option key={c.config_id} value={c.config_id}>
+                  {c.config_id} (agents={c.num_agents}, steps={c.max_steps})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Episodes</label>
@@ -134,7 +182,7 @@ export default function ChampionBenchmark({ configs }: Props) {
         </div>
         <button
           onClick={handleRun}
-          disabled={running || configs.length === 0}
+          disabled={running || filteredConfigs.length === 0 || loadingConfigs}
           className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm disabled:opacity-50"
         >
           {running ? "Running..." : "Run Benchmark"}

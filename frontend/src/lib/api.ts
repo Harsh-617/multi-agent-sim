@@ -100,6 +100,10 @@ export function listConfigs(): Promise<ConfigListItem[]> {
   return json(`${BASE}/configs`);
 }
 
+export function getConfigDetail(configId: string): Promise<Record<string, unknown>> {
+  return json(`${BASE}/configs/${encodeURIComponent(configId)}`);
+}
+
 export function createDefaultConfig(): Promise<{ config_id: string }> {
   return json(`${BASE}/configs`, {
     method: "POST",

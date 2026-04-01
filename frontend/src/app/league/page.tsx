@@ -35,6 +35,7 @@ import {
   getMixedPipelineStatus,
   startCompetitivePipeline,
   getCompetitivePipelineStatus,
+  getConfigDetail,
   PipelineStatusResponse,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
@@ -486,6 +487,10 @@ export default function LeaguePage() {
   const [hhRobStage, setHhRobStage] = useState<string | null>(null);
   const [hhRobReportId, setHhRobReportId] = useState<string | null>(null);
 
+  // Filtered configs for HH inline dropdowns (competitive only)
+  const [hhFilteredConfigs, setHhFilteredConfigs] = useState<ConfigListItem[]>([]);
+  const [hhFilteredLoading, setHhFilteredLoading] = useState(false);
+
   // Recompute feedback state (per archetype so only one message shows)
   const [rsRecomputeStatus, setRsRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [hhRecomputeStatus, setHhRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
@@ -567,6 +572,40 @@ export default function LeaguePage() {
     loadResourceSharing();
     loadHeadToHead();
   }, []);
+
+  // Filter hhConfigs to only competitive configs for inline HH dropdowns
+  useEffect(() => {
+    if (hhConfigs.length === 0) {
+      setHhFilteredConfigs([]);
+      return;
+    }
+    let cancelled = false;
+    async function filter() {
+      setHhFilteredLoading(true);
+      const results: ConfigListItem[] = [];
+      for (const c of hhConfigs) {
+        try {
+          const detail = await getConfigDetail(c.config_id);
+          const identity = detail.identity as Record<string, unknown> | undefined;
+          if (identity?.environment_type === "competitive") {
+            results.push(c);
+          }
+        } catch { /* skip */ }
+      }
+      if (!cancelled) {
+        setHhFilteredConfigs(results);
+        if (results.length > 0 && !hhBenchConfigId) {
+          setHhBenchConfigId(results[0].config_id);
+        }
+        if (results.length > 0 && hhRobConfigId === "default") {
+          setHhRobConfigId(results[0].config_id);
+        }
+        setHhFilteredLoading(false);
+      }
+    }
+    filter();
+    return () => { cancelled = true; };
+  }, [hhConfigs]);
 
   // --- Resource Sharing handlers ---
   async function handleRsRecompute() {
@@ -1143,7 +1182,7 @@ export default function LeaguePage() {
 
                     <div>
                       <h3 className="text-sm font-semibold mb-2">Champion Benchmark</h3>
-                      <ChampionBenchmark configs={rsConfigs} />
+                      <ChampionBenchmark configs={rsConfigs} archetypeFilter="mixed" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold mb-2">Run Robustness on Champion</h3>
@@ -1152,7 +1191,7 @@ export default function LeaguePage() {
                           No league members yet. Train a policy and save a snapshot to get started.
                         </p>
                       ) : (
-                        <ChampionRobustness configs={rsConfigs} />
+                        <ChampionRobustness configs={rsConfigs} archetypeFilter="mixed" />
                       )}
                     </div>
                   </div>
@@ -1263,18 +1302,22 @@ export default function LeaguePage() {
                         <label className="block text-xs text-gray-500 mb-1">
                           Config
                         </label>
-                        <select
-                          value={hhBenchConfigId}
-                          onChange={(e) => setHhBenchConfigId(e.target.value)}
-                          className="border rounded px-2 py-1 text-sm"
-                        >
-                          {hhConfigs.map((c) => (
-                            <option key={c.config_id} value={c.config_id}>
-                              {c.config_id} (agents={c.num_agents}, steps=
-                              {c.max_steps})
-                            </option>
-                          ))}
-                        </select>
+                        {hhFilteredLoading ? (
+                          <span className="text-xs text-gray-400">Loading configs...</span>
+                        ) : (
+                          <select
+                            value={hhBenchConfigId}
+                            onChange={(e) => setHhBenchConfigId(e.target.value)}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            {hhFilteredConfigs.map((c) => (
+                              <option key={c.config_id} value={c.config_id}>
+                                {c.config_id} (agents={c.num_agents}, steps=
+                                {c.max_steps})
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
@@ -1295,8 +1338,9 @@ export default function LeaguePage() {
                         onClick={handleHhBenchmark}
                         disabled={
                           hhBenchRunning ||
-                          hhConfigs.length === 0 ||
-                          hhMembers.length === 0
+                          hhFilteredConfigs.length === 0 ||
+                          hhMembers.length === 0 ||
+                          hhFilteredLoading
                         }
                         className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm disabled:opacity-50"
                       >
@@ -1378,19 +1422,22 @@ export default function LeaguePage() {
                         <label className="block text-xs text-gray-500 mb-1">
                           Config
                         </label>
-                        <select
-                          value={hhRobConfigId}
-                          onChange={(e) => setHhRobConfigId(e.target.value)}
-                          className="border rounded px-2 py-1 text-sm"
-                        >
-                          <option value="default">default</option>
-                          {hhConfigs.map((c) => (
-                            <option key={c.config_id} value={c.config_id}>
-                              {c.config_id} (agents={c.num_agents}, steps=
-                              {c.max_steps})
-                            </option>
-                          ))}
-                        </select>
+                        {hhFilteredLoading ? (
+                          <span className="text-xs text-gray-400">Loading configs...</span>
+                        ) : (
+                          <select
+                            value={hhRobConfigId}
+                            onChange={(e) => setHhRobConfigId(e.target.value)}
+                            className="border rounded px-2 py-1 text-sm"
+                          >
+                            {hhFilteredConfigs.map((c) => (
+                              <option key={c.config_id} value={c.config_id}>
+                                {c.config_id} (agents={c.num_agents}, steps=
+                                {c.max_steps})
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
