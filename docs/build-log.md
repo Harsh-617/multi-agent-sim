@@ -526,3 +526,48 @@
 - Feature highlights redesigned with 1px-gap grid layout
 - Quick start redesigned as two-column layout
 - All responsive breakpoints added
+
+
+## Post-Redesign UI Fixes and Features (April 2026)
+
+### UI Fixes (11 issues)
+1. Recent runs sort order fixed — now shows newest first
+2. Redundant stats bar removed (data already in hero snapshot card)
+3. Run archetype filtering by episode summary — accurate per-template counts
+4. Competitive config 422 error fixed — correct endpoint and policy validation
+5. Lineage/evolution detail panel replaced with sticky sidebar
+6. Champion History card layout fixed — horizontal layout per card
+7. Resource Sharing evolution label mapping fixed (strategy.label field)
+8. Mixed lineage endpoint updated to include strategy labels
+9. Config dropdown filtering by archetype in champion tabs
+10. Champion robustness converted to async with polling (fixes 500 timeout)
+11. Heatmap and scatter chart dark theme fixes
+
+### New Pages
+- /about — full capabilities, pipeline explanation, archetypes, tech stack, CTA
+
+### New Features
+- Pipeline UI — dedicated panel above League tabs showing both archetypes
+  simultaneously, with configurable settings (training steps, snapshot interval, seed)
+- Async robustness — POST /api/league/champion/robustness and competitive
+  equivalent now return immediately with robustness_id for polling
+- Competitive pipeline endpoint — POST /api/pipeline/competitive/run
+
+### Chart Fixes
+- RobustScatter.tsx — replaced scatter plot with horizontal bar chart
+  (eliminates dot overlap, shows mean + worst-case per policy per row)
+- RobustHeatmap.tsx — dark theme, vertical column headers via CSS
+  writing-mode, single scroll container for header + SVG alignment,
+  color scale legend below
+
+### LineageGraph Improvements
+- Card-style nodes (rounded rect with colored left border per strategy label)
+- Bezier curve connectors between parent/child
+- Sticky right sidebar detail panel (empty state + filled state)
+- All 11 strategy labels with correct colors
+- Legend showing only labels present in current data
+
+### LeagueEvolution Improvements
+- Removed Lineage tab (merged into Evolution)
+- Champion History as vertical scrollable list with card layout
+- Head-to-Head evolution uses same vertical stack layout
