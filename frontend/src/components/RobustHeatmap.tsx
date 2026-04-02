@@ -48,29 +48,54 @@ export default function RobustHeatmap({ perSweepResults }: Props) {
     values.push(row);
   }
 
-  const cellW = 80;
-  const cellH = 32;
-  const labelW = 160;
-  const headerH = 80;
+  const cellW = sweeps.length > 15 ? 52 : sweeps.length > 10 ? 60 : 72;
+  const cellH = 36;
+  const labelW = 140;
+  const headerH = 0;
   const svgW = labelW + sweeps.length * cellW + 10;
   const svgH = headerH + policies.length * cellH + 10;
 
   return (
-    <div className="overflow-x-auto">
-      <svg width={svgW} height={svgH} className="font-mono text-xs">
-        {/* Column headers (sweep names) */}
-        {sweeps.map((s, ci) => (
-          <text
+    <div>
+      {/* Single scrollable container for headers + heatmap */}
+      <div style={{ overflowX: "auto" }}>
+      {/* Column headers as HTML above SVG */}
+      <div style={{
+        display: "flex",
+        paddingLeft: labelW,
+        marginBottom: 2,
+        minWidth: labelW + sweeps.length * cellW,
+      }}>
+        {sweeps.map((s) => (
+          <div
             key={s}
-            x={labelW + ci * cellW + cellW / 2}
-            y={headerH - 6}
-            textAnchor="end"
-            fontSize={10}
-            transform={`rotate(-35,${labelW + ci * cellW + cellW / 2},${headerH - 6})`}
+            style={{
+              width: cellW,
+              flexShrink: 0,
+              height: 100,
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              paddingBottom: 4,
+              overflow: "hidden",
+            }}
           >
-            {s}
-          </text>
+            <div style={{
+              writingMode: "vertical-rl" as const,
+              transform: "rotate(180deg)",
+              fontSize: 9,
+              color: "#666666",
+              fontFamily: "monospace",
+              whiteSpace: "nowrap",
+              lineHeight: 1,
+            }}>
+              {s}
+            </div>
+          </div>
         ))}
+      </div>
+      <svg width={svgW} height={svgH} className="font-mono text-xs">
+        <rect width={svgW} height={svgH} fill="#0d0d0d" />
 
         {/* Rows */}
         {policies.map((policy, ri) => (
@@ -80,6 +105,7 @@ export default function RobustHeatmap({ perSweepResults }: Props) {
               x={labelW - 8}
               y={headerH + ri * cellH + cellH / 2 + 4}
               textAnchor="end"
+              fill="#888888"
               fontSize={11}
             >
               {policy}
@@ -96,14 +122,14 @@ export default function RobustHeatmap({ perSweepResults }: Props) {
                     width={cellW - 2}
                     height={cellH - 2}
                     rx={3}
-                    fill={v != null ? rewardColor(v, globalMin, globalMax) : "#e5e7eb"}
+                    fill={v != null ? rewardColor(v, globalMin, globalMax) : "#1a1a1a"}
                   />
                   <text
                     x={labelW + ci * cellW + (cellW - 2) / 2}
                     y={headerH + ri * cellH + cellH / 2 + 4}
                     textAnchor="middle"
                     fontSize={10}
-                    fill={v != null ? "#fff" : "#999"}
+                    fill={v != null ? "#fff" : "#444444"}
                   >
                     {v != null ? v.toFixed(1) : "—"}
                   </text>
@@ -112,7 +138,45 @@ export default function RobustHeatmap({ perSweepResults }: Props) {
             })}
           </g>
         ))}
+
+        {/* Grid lines between rows */}
+        {Array.from({ length: policies.length - 1 }, (_, i) => i + 1).map((i) => (
+          <line
+            key={`grid-${i}`}
+            x1={labelW}
+            y1={headerH + i * cellH}
+            x2={labelW + sweeps.length * cellW}
+            y2={headerH + i * cellH}
+            stroke="#0d0d0d"
+            strokeWidth={2}
+          />
+        ))}
       </svg>
+      </div>{/* end single scroll container */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginTop: 8,
+        paddingLeft: labelW,
+      }}>
+        <span style={{ fontSize: 10, color: "#555555", fontFamily: "monospace" }}>
+          {globalMin.toFixed(1)}
+        </span>
+        <div style={{
+          flex: 1,
+          maxWidth: 160,
+          height: 6,
+          borderRadius: 3,
+          background: "linear-gradient(to right, hsl(0,70%,45%), hsl(60,70%,45%), hsl(120,70%,45%))",
+        }} />
+        <span style={{ fontSize: 10, color: "#555555", fontFamily: "monospace" }}>
+          {globalMax.toFixed(1)}
+        </span>
+        <span style={{ fontSize: 10, color: "#444444", marginLeft: 4 }}>
+          mean reward
+        </span>
+      </div>
     </div>
   );
 }
