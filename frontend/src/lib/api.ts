@@ -661,7 +661,7 @@ export function runCompetitiveChampionBenchmark(
 
 export interface CompetitiveChampionRobustnessRequest {
   config_id: string;
-  seeds?: number[];
+  seeds?: number;
   episodes_per_seed?: number;
   limit_sweeps?: number | null;
   seed?: number;

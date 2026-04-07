@@ -25,21 +25,29 @@ interface RecentRun {
 // Stats hook
 // ---------------------------------------------------------------------------
 
-function useHomeStats(): Stats {
+function useHomeStats(): { stats: Stats; hasError: boolean } {
   const [stats, setStats] = useState<Stats>({
     totalRuns: "—",
     leagueMembers: "—",
     environments: "2",
     reports: "—",
   });
+  const [failCount, setFailCount] = useState(0);
+  const totalFetches = 3;
 
   useEffect(() => {
+    let fails = 0;
+    const trackFail = () => {
+      fails++;
+      if (fails >= totalFetches) setFailCount(fails);
+    };
+
     fetch("/api/runs/history")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: unknown[]) =>
         setStats((s) => ({ ...s, totalRuns: String(data.length) }))
       )
-      .catch(() => {});
+      .catch(trackFail);
 
     Promise.all([
       fetch("/api/league/members").then((r) =>
@@ -55,7 +63,7 @@ function useHomeStats(): Stats {
           leagueMembers: String(mixed.length + comp.length),
         }))
       )
-      .catch(() => {});
+      .catch(trackFail);
 
     Promise.all([
       fetch("/api/reports").then((r) =>
@@ -71,10 +79,10 @@ function useHomeStats(): Stats {
           reports: String(mixed.length + comp.length),
         }))
       )
-      .catch(() => {});
+      .catch(trackFail);
   }, []);
 
-  return stats;
+  return { stats, hasError: failCount >= totalFetches };
 }
 
 // ---------------------------------------------------------------------------
@@ -224,9 +232,11 @@ const features = [
 function LiveSnapshotCard({
   stats,
   recentRuns,
+  hasError,
 }: {
   stats: Stats;
   recentRuns: RecentRun[];
+  hasError: boolean;
 }) {
   const mono: React.CSSProperties = {
     fontFamily: "var(--font-mono)",
@@ -263,12 +273,12 @@ function LiveSnapshotCard({
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: "#14b8a6",
+            background: hasError ? "#444444" : "#14b8a6",
             display: "inline-block",
-            animation: "pulse 2s ease-in-out infinite",
+            animation: hasError ? "none" : "pulse 2s ease-in-out infinite",
           }}
         />
-        <span style={{ fontSize: 10, color: "#14b8a6" }}>live</span>
+        <span style={{ fontSize: 10, color: hasError ? "#444444" : "#14b8a6" }}>{hasError ? "offline" : "live"}</span>
         <span style={{ fontSize: 10, color: "#444444" }}>system snapshot</span>
       </div>
 
@@ -319,36 +329,57 @@ function LiveSnapshotCard({
       >
         RECENT ACTIVITY
       </div>
-      {(recentRuns.length > 0
-        ? recentRuns
+      {recentRuns.length > 0
+        ? recentRuns.map((run) => (
+            <div
+              key={run.run_id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "3px 0",
+              }}
+            >
+              <span style={{ fontSize: 11, color: "#444444", ...mono }}>
+                {run.run_id.slice(0, 8)}
+              </span>
+              <span style={{ fontSize: 10, color: "#555555" }}>
+                {run.agent_policy ?? "—"}
+              </span>
+              <span
+                style={{ fontSize: 10, color: "#333333", marginLeft: "auto" }}
+              >
+                {relativeTime(run.timestamp)}
+              </span>
+            </div>
+          ))
         : [
             { run_id: "--------", agent_policy: "—", timestamp: null },
             { run_id: "--------", agent_policy: "—", timestamp: null },
             { run_id: "--------", agent_policy: "—", timestamp: null },
-          ]
-      ).map((run, i) => (
-        <div
-          key={i}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "3px 0",
-          }}
-        >
-          <span style={{ fontSize: 11, color: "#444444", ...mono }}>
-            {run.run_id.slice(0, 8)}
-          </span>
-          <span style={{ fontSize: 10, color: "#555555" }}>
-            {run.agent_policy ?? "—"}
-          </span>
-          <span
-            style={{ fontSize: 10, color: "#333333", marginLeft: "auto" }}
-          >
-            {relativeTime(run.timestamp)}
-          </span>
-        </div>
-      ))}
+          ].map((run, i) => (
+            <div
+              key={`placeholder-${i}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "3px 0",
+              }}
+            >
+              <span style={{ fontSize: 11, color: "#444444", ...mono }}>
+                {run.run_id.slice(0, 8)}
+              </span>
+              <span style={{ fontSize: 10, color: "#555555" }}>
+                {run.agent_policy ?? "—"}
+              </span>
+              <span
+                style={{ fontSize: 10, color: "#333333", marginLeft: "auto" }}
+              >
+                {relativeTime(run.timestamp)}
+              </span>
+            </div>
+          ))}
     </div>
   );
 }
@@ -358,7 +389,7 @@ function LiveSnapshotCard({
 // ---------------------------------------------------------------------------
 
 export default function HomePage() {
-  const stats = useHomeStats();
+  const { stats, hasError } = useHomeStats();
   const recentRuns = useRecentRuns();
 
   return (
@@ -443,7 +474,7 @@ export default function HomePage() {
           </div>
 
           {/* Right column — live snapshot */}
-          <LiveSnapshotCard stats={stats} recentRuns={recentRuns} />
+          <LiveSnapshotCard stats={stats} recentRuns={recentRuns} hasError={hasError} />
         </section>
 
         {/* ── How It Works ── */}

@@ -246,6 +246,7 @@ async def _run_competitive_pipeline_task(
         result_path = await loop.run_in_executor(None, _run)
         summary_file = result_path / "summary.json"
         summary = json.loads(summary_file.read_text(encoding="utf-8"))
+        pm.report_id = summary.get("report_id")
         pm.summary_path = str(summary_file)
         pm.stage = "done"
     except Exception as exc:  # noqa: BLE001
@@ -320,6 +321,8 @@ async def competitive_pipeline_status(pipeline_id: str) -> dict:
     }
     if competitive_pipeline_manager.error is not None:
         response["error"] = competitive_pipeline_manager.error
+    if competitive_pipeline_manager.report_id is not None:
+        response["report_id"] = competitive_pipeline_manager.report_id
     if competitive_pipeline_manager.summary_path is not None:
         response["summary_path"] = competitive_pipeline_manager.summary_path
 

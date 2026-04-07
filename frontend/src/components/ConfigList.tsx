@@ -49,7 +49,8 @@ export default function ConfigList() {
     setStarting(configId);
     try {
       const { run_id } = await startRun(configId, policy);
-      router.push(`/run/${run_id}`);
+      // Legacy: /run/${run_id} route no longer exists; component is unused
+      router.push(`/simulate/resource-sharing/run/${run_id}`);
     } catch (e) {
       setError(String(e));
       setStarting(null);

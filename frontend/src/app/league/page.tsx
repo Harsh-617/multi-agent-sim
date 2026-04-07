@@ -97,7 +97,7 @@ function CompetitiveBarChart({
   const labelH = 48;
 
   return (
-    <svg width={chartW} height={chartH + labelH} className="block">
+    <svg width={chartW} height={chartH + labelH} style={{display: "block"}}>
       {results.map((r, i) => {
         const h = (Math.abs(r.mean_total_reward) / maxVal) * chartH;
         const x = i * (barW + barGap);
@@ -712,7 +712,7 @@ export default function LeaguePage() {
     try {
       const payload: CompetitiveChampionRobustnessRequest = {
         config_id: hhRobConfigId,
-        seeds: [hhRobSeeds],
+        seeds: hhRobSeeds,
         episodes_per_seed: hhRobEpisodesPerSeed,
         seed: hhRobSeed,
         ...(hhRobLimitSweeps !== ""
@@ -779,6 +779,7 @@ export default function LeaguePage() {
           clearInterval(interval);
         }
       } catch {
+        setRsPipelineStage("error");
         clearInterval(interval);
       }
     }, 2000);
@@ -792,10 +793,12 @@ export default function LeaguePage() {
         const status = await getCompetitivePipelineStatus(hhPipelineId);
         setHhPipelineStage(status.stage);
         if (status.error) setHhPipelineError(status.error);
+        if (status.report_id) setHhPipelineReportId(status.report_id);
         if (status.stage === "done" || status.stage === "error") {
           clearInterval(interval);
         }
       } catch {
+        setHhPipelineStage("error");
         clearInterval(interval);
       }
     }, 2000);
@@ -1081,7 +1084,7 @@ export default function LeaguePage() {
         ))}
       </div>
 
-      {error && <p className="text-red-500 mb-2 text-sm">{error}</p>}
+      {error && <p style={{color: "#f87171", marginBottom: 8, fontSize: 13}}>{error}</p>}
 
       {loading ? (
         <p style={{ color: "var(--text-secondary)" }}>Loading...</p>
@@ -1095,46 +1098,46 @@ export default function LeaguePage() {
               {/* Ratings tab */}
               {tab === "ratings" && (
                 rsSorted.length === 0 ? (
-                  <p className="text-gray-500">
+                  <p style={{color: "var(--text-secondary)"}}>
                     No league members yet. Train a policy and save a snapshot to get started.
                   </p>
                 ) : (
-                  <table className="w-full text-left text-sm border-collapse">
+                  <table style={{width: "100%", textAlign: "left", fontSize: 13, borderCollapse: "collapse"}}>
                     <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="py-2 pr-4">#</th>
-                        <th className="py-2 pr-4">Member ID</th>
-                        <th className="py-2 pr-4">Rating</th>
-                        <th className="py-2 pr-4">Parent</th>
-                        <th className="py-2 pr-4">Created</th>
-                        <th className="py-2 pr-4">Notes</th>
-                        <th className="py-2" />
+                      <tr style={{borderBottom: "1px solid var(--bg-border)"}}>
+                        <th style={{padding: "8px 16px 8px 0"}}>#</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Member ID</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Rating</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Parent</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Created</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Notes</th>
+                        <th style={{padding: "8px 0"}} />
                       </tr>
                     </thead>
                     <tbody>
                       {rsSorted.map((m, idx) => (
-                        <tr key={m.member_id} className="border-b border-gray-200">
-                          <td className="py-2 pr-4 text-gray-400">{idx + 1}</td>
-                          <td className="py-2 pr-4 font-mono">{m.member_id}</td>
-                          <td className="py-2 pr-4 font-mono">
+                        <tr key={m.member_id} style={{borderBottom: "1px solid var(--bg-border)"}}>
+                          <td style={{padding: "8px 16px 8px 0", color: "var(--text-tertiary)"}}>{idx + 1}</td>
+                          <td style={{padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)"}}>{m.member_id}</td>
+                          <td style={{padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)"}}>
                             {rsRatings.has(m.member_id)
                               ? rsRatings.get(m.member_id)!.toFixed(1)
                               : "—"}
                           </td>
-                          <td className="py-2 pr-4 font-mono text-xs">
+                          <td style={{padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)", fontSize: 12}}>
                             {m.parent_id ?? "—"}
                           </td>
-                          <td className="py-2 pr-4 text-xs text-gray-500">
+                          <td style={{padding: "8px 16px 8px 0", fontSize: 12, color: "var(--text-secondary)"}}>
                             {m.created_at
                               ? new Date(m.created_at).toLocaleString()
                               : "—"}
                           </td>
-                          <td className="py-2 pr-4 text-xs">{m.notes ?? "—"}</td>
-                          <td className="py-2">
+                          <td style={{padding: "8px 16px 8px 0", fontSize: 12}}>{m.notes ?? "—"}</td>
+                          <td style={{padding: "8px 0"}}>
                             <button
                               onClick={() => handleRsRun(m.member_id)}
                               disabled={rsStartingId !== null}
-                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50"
+                              style={{padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: rsStartingId !== null ? 0.5 : 1}}
                             >
                               {rsStartingId === m.member_id ? "Starting..." : "Run"}
                             </button>
@@ -1150,44 +1153,44 @@ export default function LeaguePage() {
               {/* Champion tab */}
               {tab === "champion" && (
                 rsConfigs.length === 0 ? (
-                  <p className="text-gray-500">
+                  <p style={{color: "var(--text-secondary)"}}>
                     No configs available. Create one on the home page first.
                   </p>
                 ) : (
-                  <div className="space-y-6">
+                  <div style={{display: "flex", flexDirection: "column", gap: 24}}>
                     {/* Champion info */}
                     {rsChampion ? (
-                      <div className="border border-gray-200 rounded p-4 text-sm">
-                        <h3 className="font-semibold mb-2">Current Champion</h3>
-                        <dl className="grid grid-cols-2 gap-x-6 gap-y-1">
-                          <dt className="text-gray-500">Member ID</dt>
-                          <dd className="font-mono text-xs">{rsChampion.member_id}</dd>
-                          <dt className="text-gray-500">Rating</dt>
-                          <dd className="font-mono">
+                      <div style={{border: "1px solid var(--bg-border)", borderRadius: 6, padding: 16, fontSize: 13}}>
+                        <h3 style={{fontWeight: 600, marginBottom: 8}}>Current Champion</h3>
+                        <dl style={{display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 24, rowGap: 4}}>
+                          <dt style={{color: "var(--text-secondary)"}}>Member ID</dt>
+                          <dd style={{fontFamily: "var(--font-mono)", fontSize: 12}}>{rsChampion.member_id}</dd>
+                          <dt style={{color: "var(--text-secondary)"}}>Rating</dt>
+                          <dd style={{fontFamily: "var(--font-mono)"}}>
                             {rsChampionRating != null
                               ? rsChampionRating.toFixed(1)
                               : "—"}
                           </dd>
-                          <dt className="text-gray-500">Parent</dt>
-                          <dd className="font-mono text-xs">
+                          <dt style={{color: "var(--text-secondary)"}}>Parent</dt>
+                          <dd style={{fontFamily: "var(--font-mono)", fontSize: 12}}>
                             {rsChampion.parent_id ?? "none"}
                           </dd>
                         </dl>
                       </div>
                     ) : (
-                      <p className="text-gray-500">
+                      <p style={{color: "var(--text-secondary)"}}>
                         No league members yet. Train a policy and save a snapshot to get started.
                       </p>
                     )}
 
                     <div>
-                      <h3 className="text-sm font-semibold mb-2">Champion Benchmark</h3>
+                      <h3 style={{fontSize: 13, fontWeight: 600, marginBottom: 8}}>Champion Benchmark</h3>
                       <ChampionBenchmark configs={rsConfigs} archetypeFilter="mixed" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold mb-2">Run Robustness on Champion</h3>
+                      <h3 style={{fontSize: 13, fontWeight: 600, marginBottom: 8}}>Run Robustness on Champion</h3>
                       {rsMembers.length === 0 ? (
-                        <p className="text-gray-500">
+                        <p style={{color: "var(--text-secondary)"}}>
                           No league members yet. Train a policy and save a snapshot to get started.
                         </p>
                       ) : (
@@ -1213,44 +1216,44 @@ export default function LeaguePage() {
               {/* Ratings tab */}
               {tab === "ratings" &&
                 (hhSorted.length === 0 ? (
-                  <p className="text-gray-500">
+                  <p style={{color: "var(--text-secondary)"}}>
                     No league members yet &mdash; run the pipeline first.
                   </p>
                 ) : (
-                  <table className="w-full text-left text-sm border-collapse">
+                  <table style={{width: "100%", textAlign: "left", fontSize: 13, borderCollapse: "collapse"}}>
                     <thead>
-                      <tr className="border-b border-gray-300">
-                        <th className="py-2 pr-4">#</th>
-                        <th className="py-2 pr-4">Member ID</th>
-                        <th className="py-2 pr-4">Rating</th>
-                        <th className="py-2 pr-4">Parent</th>
-                        <th className="py-2 pr-4">Created</th>
-                        <th className="py-2" />
+                      <tr style={{borderBottom: "1px solid var(--bg-border)"}}>
+                        <th style={{padding: "8px 16px 8px 0"}}>#</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Member ID</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Rating</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Parent</th>
+                        <th style={{padding: "8px 16px 8px 0"}}>Created</th>
+                        <th style={{padding: "8px 0"}} />
                       </tr>
                     </thead>
                     <tbody>
                       {hhSorted.map((m, idx) => (
-                        <tr key={m.member_id} className="border-b border-gray-200">
-                          <td className="py-2 pr-4 text-gray-400">{idx + 1}</td>
-                          <td className="py-2 pr-4 font-mono">{m.member_id}</td>
-                          <td className="py-2 pr-4 font-mono">
+                        <tr key={m.member_id} style={{borderBottom: "1px solid var(--bg-border)"}}>
+                          <td style={{padding: "8px 16px 8px 0", color: "var(--text-tertiary)"}}>{idx + 1}</td>
+                          <td style={{padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)"}}>{m.member_id}</td>
+                          <td style={{padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)"}}>
                             {hhRatings.has(m.member_id)
                               ? hhRatings.get(m.member_id)!.toFixed(1)
                               : "—"}
                           </td>
-                          <td className="py-2 pr-4 font-mono text-xs">
+                          <td style={{padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)", fontSize: 12}}>
                             {m.parent_id ?? "—"}
                           </td>
-                          <td className="py-2 pr-4 text-xs text-gray-500">
+                          <td style={{padding: "8px 16px 8px 0", fontSize: 12, color: "var(--text-secondary)"}}>
                             {m.created_at
                               ? new Date(m.created_at).toLocaleString()
                               : "—"}
                           </td>
-                          <td className="py-2">
+                          <td style={{padding: "8px 0"}}>
                             <button
                               onClick={() => handleHhRun(m.member_id)}
                               disabled={hhStartingId !== null}
-                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm disabled:opacity-50"
+                              style={{padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: hhStartingId !== null ? 0.5 : 1}}
                             >
                               {hhStartingId === m.member_id
                                 ? "Starting..."
@@ -1266,49 +1269,49 @@ export default function LeaguePage() {
 
               {/* Champion tab */}
               {tab === "champion" && (
-                <div className="space-y-6">
+                <div style={{display: "flex", flexDirection: "column", gap: 24}}>
                   {/* Champion info */}
                   {hhChampion ? (
-                    <div className="border border-gray-200 rounded p-4 text-sm">
-                      <h3 className="font-semibold mb-2">Current Champion</h3>
-                      <dl className="grid grid-cols-2 gap-x-6 gap-y-1">
-                        <dt className="text-gray-500">Member ID</dt>
-                        <dd className="font-mono text-xs">{hhChampion.member_id}</dd>
-                        <dt className="text-gray-500">Rating</dt>
-                        <dd className="font-mono">
+                    <div style={{border: "1px solid var(--bg-border)", borderRadius: 6, padding: 16, fontSize: 13}}>
+                      <h3 style={{fontWeight: 600, marginBottom: 8}}>Current Champion</h3>
+                      <dl style={{display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 24, rowGap: 4}}>
+                        <dt style={{color: "var(--text-secondary)"}}>Member ID</dt>
+                        <dd style={{fontFamily: "var(--font-mono)", fontSize: 12}}>{hhChampion.member_id}</dd>
+                        <dt style={{color: "var(--text-secondary)"}}>Rating</dt>
+                        <dd style={{fontFamily: "var(--font-mono)"}}>
                           {hhChampionRating != null
                             ? hhChampionRating.toFixed(1)
                             : "—"}
                         </dd>
-                        <dt className="text-gray-500">Parent</dt>
-                        <dd className="font-mono text-xs">
+                        <dt style={{color: "var(--text-secondary)"}}>Parent</dt>
+                        <dd style={{fontFamily: "var(--font-mono)", fontSize: 12}}>
                           {hhChampion.parent_id ?? "none"}
                         </dd>
                       </dl>
                     </div>
                   ) : (
-                    <p className="text-gray-500">
+                    <p style={{color: "var(--text-secondary)"}}>
                       No league members yet &mdash; run the pipeline first.
                     </p>
                   )}
 
                   {/* Benchmark section */}
                   <div>
-                    <h3 className="text-sm font-semibold mb-2">
+                    <h3 style={{fontSize: 13, fontWeight: 600, marginBottom: 8}}>
                       Champion Benchmark
                     </h3>
-                    <div className="flex items-end gap-3">
+                    <div style={{display: "flex", alignItems: "flex-end", gap: 12}}>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Config
                         </label>
                         {hhFilteredLoading ? (
-                          <span className="text-xs text-gray-400">Loading configs...</span>
+                          <span style={{fontSize: 12, color: "var(--text-tertiary)"}}>Loading configs...</span>
                         ) : (
                           <select
                             value={hhBenchConfigId}
                             onChange={(e) => setHhBenchConfigId(e.target.value)}
-                            className="border rounded px-2 py-1 text-sm"
+                            style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)"}}
                           >
                             {hhFilteredConfigs.map((c) => (
                               <option key={c.config_id} value={c.config_id}>
@@ -1320,7 +1323,7 @@ export default function LeaguePage() {
                         )}
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Episodes
                         </label>
                         <input
@@ -1331,7 +1334,7 @@ export default function LeaguePage() {
                           onChange={(e) =>
                             setHhBenchEpisodes(Number(e.target.value))
                           }
-                          className="border rounded px-2 py-1 text-sm w-16"
+                          style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 64, background: "var(--bg-base)", color: "var(--text-primary)"}}
                         />
                       </div>
                       <button
@@ -1342,17 +1345,17 @@ export default function LeaguePage() {
                           hhMembers.length === 0 ||
                           hhFilteredLoading
                         }
-                        className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm disabled:opacity-50"
+                        style={{padding: "4px 12px", background: "#9333ea", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: (hhBenchRunning || hhFilteredConfigs.length === 0 || hhMembers.length === 0 || hhFilteredLoading) ? 0.5 : 1}}
                       >
                         {hhBenchRunning ? "Running..." : "Run Champion Benchmark"}
                       </button>
                     </div>
 
                     {hhBenchData && (
-                      <div className="mt-4 space-y-3">
-                        <p className="text-sm text-gray-600">
+                      <div style={{marginTop: 16, display: "flex", flexDirection: "column" as const, gap: 12}}>
+                        <p style={{fontSize: 13, color: "var(--text-secondary)"}}>
                           Champion:{" "}
-                          <span className="font-mono">
+                          <span style={{fontFamily: "var(--font-mono)"}}>
                             {hhBenchData.champion.member_id}
                           </span>{" "}
                           (rating{" "}
@@ -1362,40 +1365,40 @@ export default function LeaguePage() {
                           )
                         </p>
 
-                        <h4 className="text-sm font-semibold">
+                        <h4 style={{fontSize: 13, fontWeight: 600}}>
                           Mean Total Reward
                         </h4>
                         <CompetitiveBarChart results={hhBenchData.results} />
 
-                        <table className="w-full text-left text-xs border-collapse">
+                        <table style={{width: "100%", textAlign: "left", fontSize: 12, borderCollapse: "collapse"}}>
                           <thead>
-                            <tr className="border-b border-gray-300">
-                              <th className="py-1 pr-3">Policy</th>
-                              <th className="py-1 pr-3">Mean Reward</th>
-                              <th className="py-1 pr-3">Mean Score</th>
-                              <th className="py-1 pr-3">Win Rate</th>
-                              <th className="py-1 pr-3">Mean Length</th>
+                            <tr style={{borderBottom: "1px solid var(--bg-border)"}}>
+                              <th style={{padding: "4px 12px 4px 0"}}>Policy</th>
+                              <th style={{padding: "4px 12px 4px 0"}}>Mean Reward</th>
+                              <th style={{padding: "4px 12px 4px 0"}}>Mean Score</th>
+                              <th style={{padding: "4px 12px 4px 0"}}>Win Rate</th>
+                              <th style={{padding: "4px 12px 4px 0"}}>Mean Length</th>
                             </tr>
                           </thead>
                           <tbody>
                             {hhBenchData.results.map((r) => (
                               <tr
                                 key={r.policy}
-                                className="border-b border-gray-200"
+                                style={{borderBottom: "1px solid var(--bg-border)"}}
                               >
-                                <td className="py-1 pr-3 font-mono">
+                                <td style={{padding: "4px 12px 4px 0", fontFamily: "var(--font-mono)"}}>
                                   {r.policy}
                                 </td>
-                                <td className="py-1 pr-3">
+                                <td style={{padding: "4px 12px 4px 0"}}>
                                   {r.mean_total_reward.toFixed(4)}
                                 </td>
-                                <td className="py-1 pr-3">
+                                <td style={{padding: "4px 12px 4px 0"}}>
                                   {r.mean_final_score.toFixed(2)}
                                 </td>
-                                <td className="py-1 pr-3">
+                                <td style={{padding: "4px 12px 4px 0"}}>
                                   {(r.win_rate * 100).toFixed(0)}%
                                 </td>
-                                <td className="py-1 pr-3">
+                                <td style={{padding: "4px 12px 4px 0"}}>
                                   {r.mean_episode_length}
                                 </td>
                               </tr>
@@ -1408,27 +1411,27 @@ export default function LeaguePage() {
 
                   {/* Robustness section */}
                   <div>
-                    <h3 className="text-sm font-semibold mb-2">
+                    <h3 style={{fontSize: 13, fontWeight: 600, marginBottom: 8}}>
                       Run Robustness on Champion
                     </h3>
-                    <p className="text-sm text-gray-600 mb-3">
+                    <p style={{fontSize: 13, color: "var(--text-secondary)", marginBottom: 12}}>
                       Evaluates the competitive league champion against all baseline
                       policies across multiple environment variants and saves a
                       robustness report.
                     </p>
 
-                    <div className="flex flex-wrap items-end gap-3">
+                    <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12}}>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Config
                         </label>
                         {hhFilteredLoading ? (
-                          <span className="text-xs text-gray-400">Loading configs...</span>
+                          <span style={{fontSize: 12, color: "var(--text-tertiary)"}}>Loading configs...</span>
                         ) : (
                           <select
                             value={hhRobConfigId}
                             onChange={(e) => setHhRobConfigId(e.target.value)}
-                            className="border rounded px-2 py-1 text-sm"
+                            style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)"}}
                           >
                             {hhFilteredConfigs.map((c) => (
                               <option key={c.config_id} value={c.config_id}>
@@ -1440,7 +1443,7 @@ export default function LeaguePage() {
                         )}
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Seeds
                         </label>
                         <input
@@ -1449,11 +1452,11 @@ export default function LeaguePage() {
                           max={20}
                           value={hhRobSeeds}
                           onChange={(e) => setHhRobSeeds(Number(e.target.value))}
-                          className="border rounded px-2 py-1 text-sm w-16"
+                          style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 64, background: "var(--bg-base)", color: "var(--text-primary)"}}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Episodes/seed
                         </label>
                         <input
@@ -1464,11 +1467,11 @@ export default function LeaguePage() {
                           onChange={(e) =>
                             setHhRobEpisodesPerSeed(Number(e.target.value))
                           }
-                          className="border rounded px-2 py-1 text-sm w-16"
+                          style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 64, background: "var(--bg-base)", color: "var(--text-primary)"}}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Limit sweeps (opt.)
                         </label>
                         <input
@@ -1477,31 +1480,31 @@ export default function LeaguePage() {
                           placeholder="—"
                           value={hhRobLimitSweeps}
                           onChange={(e) => setHhRobLimitSweeps(e.target.value)}
-                          className="border rounded px-2 py-1 text-sm w-20"
+                          style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 80, background: "var(--bg-base)", color: "var(--text-primary)"}}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label style={{display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4}}>
                           Seed
                         </label>
                         <input
                           type="number"
                           value={hhRobSeed}
                           onChange={(e) => setHhRobSeed(Number(e.target.value))}
-                          className="border rounded px-2 py-1 text-sm w-20"
+                          style={{border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 80, background: "var(--bg-base)", color: "var(--text-primary)"}}
                         />
                       </div>
                       <button
                         onClick={handleHhRobustness}
                         disabled={hhRobRunning || hhMembers.length === 0}
-                        className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm disabled:opacity-50"
+                        style={{padding: "4px 12px", background: "#4f46e5", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: (hhRobRunning || hhMembers.length === 0) ? 0.5 : 1}}
                       >
                         {hhRobRunning ? "Running..." : "Run Robustness"}
                       </button>
                     </div>
 
                     {hhRobRunning && hhRobStage && (
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p style={{fontSize: 13, color: "var(--text-secondary)", marginTop: 8}}>
                         {hhRobStage === "loading_config" && "Loading configuration..."}
                         {hhRobStage === "evaluating" && "Running robustness sweeps..."}
                         {hhRobStage === "writing_report" && "Generating report..."}
@@ -1509,11 +1512,11 @@ export default function LeaguePage() {
                     )}
 
                     {hhRobStage === "done" && hhRobReportId && (
-                      <p className="text-sm text-green-600 mt-2">
+                      <p style={{fontSize: 13, color: "var(--accent)", marginTop: 8}}>
                         Complete!{" "}
                         <a
                           href={`/research/${encodeURIComponent(hhRobReportId)}`}
-                          className="underline font-medium"
+                          style={{textDecoration: "underline", fontWeight: 500}}
                         >
                           View report &rarr;
                         </a>

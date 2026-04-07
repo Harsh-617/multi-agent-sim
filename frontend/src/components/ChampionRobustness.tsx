@@ -98,6 +98,9 @@ export default function ChampionRobustness({ configs, archetypeFilter }: Props) 
           clearInterval(interval);
         }
       } catch {
+        setStage("error");
+        setError("Lost connection to server — check if backend is running");
+        setRunning(false);
         clearInterval(interval);
       }
     }, 2000);
