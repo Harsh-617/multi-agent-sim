@@ -571,3 +571,28 @@
 - Removed Lineage tab (merged into Evolution)
 - Champion History as vertical scrollable list with card layout
 - Head-to-Head evolution uses same vertical stack layout
+
+
+## Pre-Deployment Audit (April 2026)
+
+9 issues found and fixed before deployment:
+
+Critical (1):
+- Competitive pipeline never returned report_id — fixed in
+  backend task and status endpoint, frontend polling now extracts it
+
+Major (4):
+- League page Tailwind light-theme classes replaced with inline
+  dark theme styles (100+ className replacements)
+- Head-to-Head robustness seeds sent as [3] instead of 3 — fixed
+- ConfigList.tsx navigated to dead route /run/${id} — fixed
+- HH pipeline polling never extracted report_id — fixed
+
+Minor (4):
+- Home page "live" indicator now shows "offline" when API is down
+- Recent activity React keys changed from index to run_id
+- ChampionRobustness polling catch block now shows error to user
+- Pipeline polling catch blocks now set error stage
+
+Build: npm run build passes with zero errors
+TypeScript: npx tsc --noEmit passes with zero errors
