@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -435,18 +436,45 @@ class TestChampionRobustness:
 
         monkeypatch.setattr(rl, "REPORTS_ROOT", tmp_path / "reports")
 
-    def test_no_members_returns_404(self, client: TestClient):
-        resp = client.post(
+    @pytest.fixture
+    def async_client(self):
+        """TestClient used as context-manager so the event loop stays alive
+        for ``asyncio.create_task`` background work."""
+        from backend.main import app
+
+        with TestClient(app) as c:
+            yield c
+
+    @staticmethod
+    def _poll_robustness(client: TestClient, robustness_id: str, max_iters: int = 60):
+        """Poll the robustness status endpoint until stage is 'done' or 'error'."""
+        for _ in range(max_iters):
+            status_resp = client.get(
+                f"/api/league/champion/robustness/{robustness_id}/status"
+            )
+            assert status_resp.status_code == 200
+            status = status_resp.json()
+            if status["stage"] in ("done", "error"):
+                return status
+            time.sleep(0.5)
+        pytest.fail(f"Robustness task did not finish within {max_iters} iterations")
+
+    def test_no_members_returns_404(self, async_client: TestClient):
+        resp = async_client.post(
             "/api/league/champion/robustness",
             json={"config_id": "default", "seeds": 1, "episodes_per_seed": 1,
                   "limit_sweeps": 1, "seed": 42},
         )
-        assert resp.status_code == 404
-        assert "No league members" in resp.json()["detail"]
+        assert resp.status_code == 200
+        robustness_id = resp.json()["robustness_id"]
+
+        status = self._poll_robustness(async_client, robustness_id)
+        assert status["stage"] == "error"
+        assert status["error"]
 
     def test_missing_ratings_still_succeeds(
         self,
-        client: TestClient,
+        async_client: TestClient,
         league_dir: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
@@ -458,19 +486,24 @@ class TestChampionRobustness:
 
         monkeypatch.setattr(ev_mod, "create_agent", lambda p, **kw: RandomAgent())
 
-        resp = client.post(
+        resp = async_client.post(
             "/api/league/champion/robustness",
             json={"config_id": "default", "seeds": 1, "episodes_per_seed": 1,
-                  "limit_sweeps": 1, "seed": 42},
+                  "limit_sweeps": 1, "seed": 42, "max_steps": 10},
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert "report_id" in data
-        assert data["report_id"].startswith("robust_")
+        assert "robustness_id" in data
+        robustness_id = data["robustness_id"]
+
+        status = self._poll_robustness(async_client, robustness_id)
+        assert status["stage"] == "done"
+        assert "report_id" in status
+        assert status["report_id"].startswith("robust_")
 
     def test_success_path_produces_report_json(
         self,
-        client: TestClient,
+        async_client: TestClient,
         league_dir: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -489,14 +522,18 @@ class TestChampionRobustness:
 
         monkeypatch.setattr(ev_mod, "create_agent", lambda p, **kw: RandomAgent())
 
-        resp = client.post(
+        resp = async_client.post(
             "/api/league/champion/robustness",
             json={"config_id": "default", "seeds": 1, "episodes_per_seed": 1,
-                  "limit_sweeps": 1, "seed": 42},
+                  "limit_sweeps": 1, "seed": 42, "max_steps": 10},
         )
         assert resp.status_code == 200
         data = resp.json()
-        report_id = data["report_id"]
+        robustness_id = data["robustness_id"]
+
+        status = self._poll_robustness(async_client, robustness_id)
+        assert status["stage"] == "done"
+        report_id = status["report_id"]
 
         # report.json must exist under the isolated reports root
         import backend.api.routes_league as rl
@@ -509,14 +546,18 @@ class TestChampionRobustness:
 
     def test_bad_config_returns_404(
         self,
-        client: TestClient,
+        async_client: TestClient,
         league_dir: Path,
     ):
         _make_fake_member(league_dir, "league_000001")
-        resp = client.post(
+        resp = async_client.post(
             "/api/league/champion/robustness",
             json={"config_id": "nonexistent", "seeds": 1, "episodes_per_seed": 1,
                   "limit_sweeps": 1, "seed": 42},
         )
-        assert resp.status_code == 404
-        assert "nonexistent" in resp.json()["detail"]
+        assert resp.status_code == 200
+        robustness_id = resp.json()["robustness_id"]
+
+        status = self._poll_robustness(async_client, robustness_id)
+        assert status["stage"] == "error"
+        assert status["error"]
