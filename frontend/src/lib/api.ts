@@ -239,7 +239,14 @@ export function connectReplay(
 ): EventSource {
   const es = new EventSource(`${BASE}/runs/${runId}/replay`);
   es.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data) as WsMessage;
+    let msg: WsMessage;
+    try {
+      msg = JSON.parse(ev.data) as WsMessage;
+    } catch {
+      es.close();
+      onDone?.();
+      return;
+    }
     onMessage(msg);
     if (msg.type === "done") {
       es.close();
