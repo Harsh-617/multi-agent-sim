@@ -780,6 +780,7 @@ export default function LeaguePage() {
         }
       } catch {
         setRsPipelineStage("error");
+        setRsPipelineError("Lost connection to server — check if backend is running");
         clearInterval(interval);
       }
     }, 2000);
@@ -799,6 +800,7 @@ export default function LeaguePage() {
         }
       } catch {
         setHhPipelineStage("error");
+        setHhPipelineError("Lost connection to server — check if backend is running");
         clearInterval(interval);
       }
     }, 2000);
