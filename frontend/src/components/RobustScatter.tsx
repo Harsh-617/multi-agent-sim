@@ -32,7 +32,11 @@ export default function RobustScatter({ perPolicyRobustness }: Props) {
     (p) => p.n_sweeps_evaluated > 0
   );
   if (entries.length === 0)
-    return <p style={{ color: "#666666", fontSize: 13 }}>No data.</p>;
+    return (
+      <div style={{ color: "var(--text-secondary, #666666)", fontSize: 13, padding: 16 }}>
+        No data
+      </div>
+    );
 
   const rowHeight = 44;
   const pad = { top: 40, right: 120, bottom: 40, left: 140 };
