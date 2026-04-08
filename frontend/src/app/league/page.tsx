@@ -823,6 +823,9 @@ export default function LeaguePage() {
         }
       } catch {
         clearInterval(interval);
+        setHhRobRunning(false);
+        setHhRobStage("error");
+        setHhError("Lost connection to server — check if backend is running");
       }
     }, 2000);
     return () => clearInterval(interval);
