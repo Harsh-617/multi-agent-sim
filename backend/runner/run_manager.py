@@ -41,7 +41,7 @@ class RunManager:
     # ------------------------------------------------------------------
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
-        q: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=200)
         self._subscribers.append(q)
         return q
 
@@ -53,7 +53,10 @@ class RunManager:
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         for q in self._subscribers:
-            await q.put(message)
+            try:
+                q.put_nowait(message)
+            except asyncio.QueueFull:
+                pass
 
     # ------------------------------------------------------------------
     # Task tracking
