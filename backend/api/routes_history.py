@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -16,6 +17,8 @@ from backend.runner.experiment_runner import run_experiment
 from backend.runner.run_manager import RunManager
 from backend.schemas.api_models import BenchmarkRequest
 from backend.storage_root import STORAGE_ROOT
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["history"])
 
@@ -68,13 +71,20 @@ async def replay_run(run_id: str) -> StreamingResponse:
     async def _generate():
         # Read all metric records
         lines = metrics_path.read_text(encoding="utf-8").strip().split("\n")
-        records = [json.loads(line) for line in lines if line.strip()]
+        records: list[dict] = []
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("Skipping malformed metrics line: %s", line)
 
         # Group by step
         from collections import defaultdict
         by_step: dict[int, list[dict]] = defaultdict(list)
         for rec in records:
-            by_step[rec["step"]].append(rec)
+            by_step[rec.get("step", 0)].append(rec)
 
         # Stream step-by-step
         for step in sorted(by_step.keys()):
