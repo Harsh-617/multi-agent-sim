@@ -596,3 +596,30 @@ Minor (4):
 
 Build: npm run build passes with zero errors
 TypeScript: npx tsc --noEmit passes with zero errors
+
+
+## Second-Pass Audit (April 2026)
+
+12 issues found and fixed across backend, frontend, and tests:
+
+Critical (4):
+- 4 TestChampionRobustness tests updated for async polling pattern
+- WebSocket JSON.parse wrapped in try-catch in connectMetrics
+- SSE JSON.parse wrapped in try-catch in connectReplay
+- WebSocket callback args corrected in both run pages
+
+Major (5):
+- Replay SSE endpoint hardened against malformed metrics.jsonl
+- Benchmark run_id now unique per request (UUID suffix)
+- HH robustness spinner now resets correctly on network error
+- Pipeline polling catch blocks now set error message
+- seeds field standardized to int in competitive ChampionRobustnessRequest
+
+Minor (3):
+- RobustScatter empty array edge case fixed with no-data placeholder
+- WebSocket subscriber queues bounded to maxsize=200
+- Malformed config files now log a warning instead of silently disappearing
+
+Build: npm run build passes with zero errors
+TypeScript: npx tsc --noEmit passes with zero errors
+Tests: 266 passed, 0 failed

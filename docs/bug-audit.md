@@ -86,3 +86,42 @@ The following deployment-readiness issues were fixed in PR #10:
 4. **Test** — Ensure all existing tests pass (`pytest tests/unit -v`). Add a regression test if applicable.
 5. **PR** — Open a pull request referencing the GitHub issue.
 6. **Merge** — After review, merge and update the **Status** column in this file to `Fixed`.
+
+---
+
+### Pre-Deployment Audit (April 2026)
+
+9 issues found and fixed before deployment:
+
+| ID | Severity | File(s) | Description | Status |
+|----|----------|---------|-------------|--------|
+| P1 | Critical | backend/api/routes_pipeline.py, frontend/src/app/league/page.tsx | Competitive pipeline never returned report_id — backend task and status endpoint fixed, frontend polling now extracts it | Fixed |
+| P2 | Major | frontend/src/app/league/page.tsx | League page had 100+ Tailwind light-theme classes — replaced with inline dark theme styles | Fixed |
+| P3 | Major | frontend/src/app/league/page.tsx | Head-to-Head robustness seeds sent as [3] instead of 3 — fixed to send int | Fixed |
+| P4 | Major | frontend/src/components/ConfigList.tsx | ConfigList navigated to dead route /run/${id} — fixed to correct URL | Fixed |
+| P5 | Major | frontend/src/app/league/page.tsx | HH pipeline polling never extracted report_id — fixed | Fixed |
+| P6 | Minor | frontend/src/app/page.tsx | Home page "live" indicator now shows "offline" when API is down | Fixed |
+| P7 | Minor | frontend/src/app/page.tsx | Recent activity React keys changed from index to run_id | Fixed |
+| P8 | Minor | frontend/src/components/ChampionRobustness.tsx | Robustness polling catch block now shows error to user | Fixed |
+| P9 | Minor | frontend/src/app/league/page.tsx | Pipeline polling catch blocks now set error stage | Fixed |
+
+---
+
+### Second-Pass Audit (April 2026)
+
+12 issues found and fixed after pre-deployment audit:
+
+| ID | Severity | File(s) | Description | Status |
+|----|----------|---------|-------------|--------|
+| F1 | Critical | tests/integration/test_league_api.py | 4 tests never updated after champion robustness endpoint was refactored from sync to async — updated all 4 to use polling pattern | Fixed |
+| F2 | Critical | frontend/src/lib/api.ts | WebSocket onmessage JSON.parse had no try-catch — malformed message killed all future message processing | Fixed |
+| F3 | Critical | frontend/src/lib/api.ts | SSE replay onmessage JSON.parse had no try-catch — malformed event crashed the stream mid-replay | Fixed |
+| F4 | Critical | frontend/src/app/simulate/resource-sharing/run/[run_id]/page.tsx, frontend/src/app/simulate/head-to-head/run/[run_id]/page.tsx | WebSocket callback arguments swapped in both run pages — caused race condition on error and unnecessary retry on clean close | Fixed |
+| F5 | Major | backend/api/routes_history.py | Replay SSE endpoint crashed on malformed metrics.jsonl lines — added try-except and safe key access | Fixed |
+| F6 | Major | backend/api/routes_history.py | Benchmark run_id not unique per request — concurrent requests with same config overwrote each other | Fixed |
+| F7 | Major | frontend/src/app/league/page.tsx | HH robustness polling catch block never reset running state — perpetual spinner on network error | Fixed |
+| F8 | Major | frontend/src/app/league/page.tsx | Pipeline polling catch blocks set error stage but never set error message — blank error state shown to user | Fixed |
+| F9 | Major | backend/api/routes_competitive_league.py | seeds field type mismatch between two ChampionRobustnessRequest schemas — competitive endpoint rejected int with 422 | Fixed |
+| F10 | Minor | frontend/src/components/RobustScatter.tsx | Math.min/max called on empty array produced broken SVG scales — added no-data placeholder | Fixed |
+| F11 | Minor | backend/runner/run_manager.py | Unbounded asyncio.Queue for WebSocket subscribers — slow clients leaked memory at ~50ms broadcast rate | Fixed |
+| F12 | Minor | backend/api/routes_config.py | Malformed config files silently skipped with no logging — added logger.warning so server logs show the cause | Fixed |
