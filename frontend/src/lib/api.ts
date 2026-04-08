@@ -846,7 +846,13 @@ export function connectMetrics(
   const ws = new WebSocket(`${proto}://${base}/api/ws/metrics/${runId}`);
 
   ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data) as WsMessage;
+    let msg: WsMessage;
+    try {
+      msg = JSON.parse(ev.data) as WsMessage;
+    } catch {
+      onError?.(ev);
+      return;
+    }
     onMessage(msg);
   };
 
