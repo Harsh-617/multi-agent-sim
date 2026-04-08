@@ -209,19 +209,24 @@ function QuickStartButton({ href, label }: { href: string; label: string }) {
 
 const features = [
   {
-    tag: "Self-play",
-    title: "Elo-rated self-play leagues",
-    body: "Agents train against a population of past snapshots. Periodic checkpoints enter the league, get Elo-rated, and form a lineage of increasingly capable policies.",
+    tag: "Training",
+    title: "PPO Self-Play Training",
+    body: "Agents are trained using Proximal Policy Optimization against a league of past policy snapshots. Opponent sampling is weighted toward recent members, producing steady improvement without catastrophic forgetting.",
   },
   {
-    tag: "Evaluation",
-    title: "20-variant robustness sweeps",
-    body: "Champion policies face systematic stress tests across information asymmetry, resource scarcity, uncertainty, and population size variants. Score = 0.7 × mean + 0.3 × worst-case.",
+    tag: "League",
+    title: "Elo-Rated League System",
+    body: "Every policy snapshot enters a league and is rated using the Elo system. Head-to-head matches determine rankings. The highest-rated member becomes the champion and is used as the baseline for future training.",
+  },
+  {
+    tag: "Robustness",
+    title: "20-Variant Robustness Sweeps",
+    body: "The champion is stress-tested across 20 environment configurations — varying resource scarcity, information asymmetry, observation noise, and agent count. A weighted score (0.7 × mean + 0.3 × worst-case) summarizes performance under pressure.",
   },
   {
     tag: "Analysis",
-    title: "Emergent strategy discovery",
-    body: "K-means clustering over behavioral features identifies distinct playstyles — Cooperative, Aggressive, Robust, Unstable — without manual labeling. Watch strategies shift across league generations.",
+    title: "Emergent Strategy Clustering",
+    body: "After evaluation, K-means clustering groups policies by behavioral features — cooperation rate, extraction frequency, defense patterns. Clusters are automatically labeled (e.g. Cooperator, Exploiter, Opportunist) with no manual annotation required.",
   },
 ];
 
@@ -430,7 +435,7 @@ export default function HomePage() {
             <div
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 13,
                 letterSpacing: "0.12em",
                 color: "#14b8a6",
                 textTransform: "uppercase",
@@ -463,8 +468,10 @@ export default function HomePage() {
               }}
             >
               A research platform for studying emergent strategy in multi-agent
-              environments. Train agents via PPO self-play, run Elo-rated
-              leagues, and analyze how behaviors evolve across generations.
+              environments. Configure environments, train agents using PPO with
+              league-based self-play, run Elo-rated tournaments, and analyze how
+              strategies evolve across generations — all from a single
+              end-to-end pipeline.
             </p>
 
             <div style={{ display: "flex", gap: 12 }}>
@@ -539,27 +546,27 @@ export default function HomePage() {
             {[
               {
                 step: "01",
-                title: "Choose a template",
+                title: "Configure",
                 description:
-                  "Pick an environment — Resource Sharing or Head-to-Head. Configure agents, episode length, and behavioral parameters.",
+                  "Pick a simulation template — Resource Sharing or Head-to-Head. Set the number of agents, episode length, seed, and behavioral parameters. Save your config to reuse it across runs.",
               },
               {
                 step: "02",
-                title: "Train with self-play",
+                title: "Simulate",
                 description:
-                  "PPO agents train against a league of past snapshots. Policies evolve across generations with Elo-based ranking.",
+                  "Start a run. Agents act in the environment each step, producing rewards and observations. Metrics stream live to the dashboard via WebSocket — shared pool, cooperation rate, reward curves — and are saved to storage for replay.",
               },
               {
                 step: "03",
-                title: "League evolves",
+                title: "Train & League",
                 description:
-                  "Periodic snapshots enter the league. A lineage tree builds — parent policies give rise to children with different strategies.",
+                  "Run the full pipeline: PPO trains a shared-policy agent across league-sampled opponents. Periodic snapshots are saved as league members, Elo-rated against each other, and used as future opponents — creating a self-improving population.",
               },
               {
                 step: "04",
-                title: "Analyze results",
+                title: "Evaluate & Analyze",
                 description:
-                  "Robustness sweeps stress-test the champion. Strategy clustering discovers emergent playstyles automatically.",
+                  "The league champion is tested across 20 environment variants — different resource levels, noise, asymmetry, and pressure. Cross-seed evaluation produces a robustness score. K-means clustering identifies emergent strategy labels across the league population.",
               },
             ].map((item) => (
               <div
@@ -655,7 +662,7 @@ export default function HomePage() {
             className="feature-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
+              gridTemplateColumns: "repeat(2, 1fr)",
               gap: 1,
               background: "#1a1a1a",
             }}
@@ -752,21 +759,21 @@ export default function HomePage() {
           >
             {[
               {
-                q: "When do agents cooperate vs defect?",
-                desc: "Configure a shared-resource environment and watch as agents discover whether cooperation or exploitation leads to better long-term outcomes.",
+                q: "When do agents learn to cooperate instead of defect?",
+                desc: "In the Resource Sharing environment, agents choose every step whether to contribute to a shared pool or extract from it. Run experiments to see under what conditions — agent count, memory depth, reputation — sustained cooperation emerges.",
                 tag: "Resource Sharing",
                 tagColor: "var(--accent)",
               },
               {
-                q: "Which strategies survive stress testing?",
-                desc: "Run robustness sweeps across 20 environment variants. See which policies hold up under information asymmetry, resource scarcity, and uncertainty.",
-                tag: "Robustness",
+                q: "Which strategies hold up under stress?",
+                desc: "Robustness sweeps test the league champion across 20 environment variants with shifted parameters. The heatmap and scatter chart show exactly which conditions cause performance to collapse and which strategies are truly robust.",
+                tag: "Robustness Analysis",
                 tagColor: "#f59e0b",
               },
               {
-                q: "How do playstyles evolve across generations?",
-                desc: "League-based self-play produces a lineage of agents. Strategy clustering reveals how behavioral patterns shift as policies improve.",
-                tag: "Evolution",
+                q: "How do agent strategies evolve across generations?",
+                desc: "The league evolution graph shows the full lineage of trained policies — parent, child, rating, and strategy label at each node. Watch how the population shifts from random play to structured strategies over generations of self-play.",
+                tag: "League Evolution",
                 tagColor: "#8b5cf6",
               },
             ].map((item) => (
