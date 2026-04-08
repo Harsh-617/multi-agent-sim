@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -58,7 +61,8 @@ async def list_configs() -> list[ConfigListItem]:
                 num_agents=data["population"]["num_agents"],
                 max_steps=data["population"]["max_steps"],
             ))
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError) as exc:
+            logger.warning("Skipping malformed config file %s: %s", p.name, exc)
             continue
     return items
 
