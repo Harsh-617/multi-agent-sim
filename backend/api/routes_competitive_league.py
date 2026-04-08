@@ -632,7 +632,7 @@ async def champion_benchmark(req: ChampionBenchmarkRequest) -> dict:
 
 class ChampionRobustnessRequest(BaseModel):
     config_id: str = Field(default="default")
-    seeds: list[int] = Field(default=[42, 43, 44])
+    seeds: int = Field(default=3, ge=1, le=20)
     episodes_per_seed: int = Field(default=2, ge=1, le=10)
     limit_sweeps: int | None = Field(default=None, ge=1)
     seed: int = Field(default=42)
@@ -690,7 +690,7 @@ async def _run_competitive_robustness_task(
             lambda: run_competitive_robustness(
                 config,
                 specs,
-                req.seeds,
+                [req.seed + i for i in range(req.seeds)],
                 episodes_per_seed=req.episodes_per_seed,
                 sweeps=sweeps,
             ),
