@@ -88,11 +88,6 @@ export default function RunPage() {
         },
         () => {
           setWsStatus("closed");
-          // WS closed cleanly — fetch detail in case run already finished
-          fetchRunDetail();
-        },
-        () => {
-          setWsStatus("closed");
           // Exponential backoff, max 5 attempts; stop if run completed normally.
           if (!doneRef.current && retryRef.current < 5) {
             retryRef.current++;
@@ -101,6 +96,11 @@ export default function RunPage() {
             // Retries exhausted — try REST fallback
             fetchRunDetail();
           }
+        },
+        () => {
+          setWsStatus("closed");
+          // WS closed cleanly — fetch detail in case run already finished
+          fetchRunDetail();
         }
       );
       wsRef.current = ws;
