@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -139,7 +140,7 @@ async def run_benchmark(req: BenchmarkRequest) -> dict:
     results = []
     for policy in req.agent_policies:
         mgr = RunManager()
-        run_id = f"bench_{req.config_id[:8]}_{policy}"
+        run_id = f"bench_{req.config_id[:8]}_{policy}_{uuid.uuid4().hex[:8]}"
 
         await run_experiment(config, run_id, RUNS_DIR, mgr, agent_policy=policy)
 
