@@ -1,0 +1,34 @@
+{
+  "algo": "ppo_shared",
+  "obs_keys": [
+    "step",
+    "shared_pool",
+    "own_resources",
+    "num_active_agents",
+    "cooperation_scores",
+    "action_history"
+  ],
+  "obs_dim": 33,
+  "action_mapping": {
+    "0": "cooperate",
+    "1": "extract",
+    "2": "defend",
+    "3": "conditional"
+  },
+  "amount_distribution": "Beta",
+  "config_hash": "c904d32183763749",
+  "training_steps": 249600,
+  "seed": 42,
+  "hyperparameters": {
+    "total_timesteps": 50000,
+    "rollout_steps": 256,
+    "ppo_epochs": 4,
+    "num_minibatches": 4,
+    "learning_rate": 0.0003,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_eps": 0.2,
+    "vf_coef": 0.5,
+    "ent_coef": 0.01
+  }
+}
