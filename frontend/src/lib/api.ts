@@ -836,6 +836,156 @@ export function getCompetitivePipelineStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Cooperative archetype
+// ---------------------------------------------------------------------------
+
+/** Per-agent step metrics for a cooperative run (mirrors STEP_METRIC_KEYS). */
+export interface CooperativeStepMetric {
+  step: number;
+  agent_id: string;
+  reward: number;
+  task_type: number | null;
+  effort_amount: number;
+  effective_contribution: number;
+  r_group: number;
+  r_individual: number;
+  r_efficiency: number;
+  system_stress: number;
+  backlog_level: number;
+  completion_rate: number;
+}
+
+/** Per-agent episode-level metrics included in CooperativeEpisodeSummary. */
+export interface CooperativeAgentMetrics {
+  cumulative_reward: number;
+  mean_reward_per_step: number;
+  effort_utilization: number;
+  idle_rate: number;
+  dominant_task_type: number | null;
+  dominant_type_fraction: number;
+  final_specialization_score: number;
+  peak_specialization_score: number;
+  role_stability: number;
+  strategy_label: string;
+}
+
+/** Full episode summary for a cooperative run. */
+export interface CooperativeEpisodeSummary {
+  episode_length: number;
+  termination_reason: string | null;
+  total_tasks_arrived: number;
+  total_tasks_completed: number;
+  completion_ratio: number;
+  final_backlog_level: number;
+  final_system_stress: number;
+  mean_system_stress: number;
+  peak_system_stress: number;
+  collapse_occurred: boolean;
+  total_reward_per_agent: Record<string, number>;
+  mean_reward_per_step_per_agent: Record<string, number>;
+  group_efficiency_ratio: number;
+  contribution_variance: number;
+  specialization_divergence: number;
+  mean_role_stability: number;
+  free_rider_count: number;
+  free_rider_fraction: number;
+  effort_gini_coefficient: number;
+  agent_metrics: Record<string, CooperativeAgentMetrics>;
+}
+
+/** Lightweight cooperative run list item. */
+export interface CooperativeRunListItem {
+  run_id: string;
+  seed: number | null;
+  num_agents: number | null;
+  max_steps: number | null;
+  num_task_types: number | null;
+  agent_policy: string | null;
+  written_at: string | null;
+  termination_reason: string | null;
+  episode_length: number | null;
+  completion_ratio: number | null;
+}
+
+/** Full cooperative run detail (metadata + episode summary). */
+export interface CooperativeRunDetail extends CooperativeRunListItem {
+  episode_summary: CooperativeEpisodeSummary | null;
+}
+
+/** WsStepMessage variant carrying CooperativeStepMetric records. */
+export interface CooperativeWsStepMessage {
+  type: "step";
+  run_id: string;
+  t: number;
+  metrics: CooperativeStepMetric[];
+  events: Array<Record<string, unknown>> | null;
+}
+
+export interface CooperativeWsDoneMessage {
+  type: "done";
+  run_id: string;
+  termination_reason: string | null;
+  episode_summary: CooperativeEpisodeSummary | null;
+}
+
+export type CooperativeWsMessage =
+  | CooperativeWsStepMessage
+  | CooperativeWsDoneMessage;
+
+/** List all cooperative runs. */
+export function getCooperativeRuns(): Promise<CooperativeRunListItem[]> {
+  return json(`${BASE}/cooperative/runs`);
+}
+
+/** Get full detail for a single cooperative run. */
+export function getCooperativeRunDetail(
+  runId: string,
+): Promise<CooperativeRunDetail> {
+  return json(`${BASE}/cooperative/runs/${encodeURIComponent(runId)}`);
+}
+
+/** Get only the episode summary for a cooperative run. */
+export function getCooperativeRunSummary(
+  runId: string,
+): Promise<CooperativeEpisodeSummary> {
+  return json(`${BASE}/cooperative/runs/${encodeURIComponent(runId)}/summary`);
+}
+
+/**
+ * Stream a completed cooperative run's metrics.jsonl via SSE.
+ * Returns the EventSource so the caller can close it.
+ */
+export function streamCooperativeReplay(
+  runId: string,
+  onMessage: (msg: CooperativeWsMessage) => void,
+  onDone?: () => void,
+): EventSource {
+  const es = new EventSource(
+    `${BASE}/cooperative/runs/${encodeURIComponent(runId)}/replay`,
+  );
+  es.onmessage = (ev) => {
+    let msg: CooperativeWsMessage;
+    try {
+      msg = JSON.parse(ev.data) as CooperativeWsMessage;
+    } catch {
+      es.close();
+      onDone?.();
+      return;
+    }
+    onMessage(msg);
+    if (msg.type === "done") {
+      es.close();
+      onDone?.();
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    onDone?.();
+  };
+  return es;
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 

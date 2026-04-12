@@ -4,6 +4,12 @@ Ingests environment state and step results each step to produce:
   - structured step metric dicts
   - accumulated episode-level metrics
   - semantic event records
+
+Step E additions:
+  - Per-agent extended metrics: idle_rate, effort_utilization, dominant_task_type,
+    role_stability, final/peak specialization scores
+  - Social/group metrics: Gini coefficient, free-rider stats, specialization divergence
+  - peak_system_stress, group_efficiency_ratio
 """
 
 from __future__ import annotations
@@ -29,11 +35,48 @@ _STRESS_LOW = 0.4
 _GINI_THRESHOLD = 0.5
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _gini(values: list[float]) -> float:
+    """Gini coefficient of a list of non-negative floats. Bounded [0, 1]."""
+    n = len(values)
+    if n <= 1:
+        return 0.0
+    total = sum(values)
+    if total == 0.0:
+        return 0.0
+    s = 0.0
+    for i in range(n):
+        for j in range(n):
+            s += abs(values[i] - values[j])
+    return s / (2.0 * n * total)
+
+
+def _variance(values: list[float]) -> float:
+    """Population variance."""
+    n = len(values)
+    if n == 0:
+        return 0.0
+    mean = sum(values) / n
+    return sum((v - mean) ** 2 for v in values) / n
+
+
 class CooperativeMetricsCollector:
     """Collects and structures metrics for a single cooperative episode."""
 
-    def __init__(self, config: InstrumentationConfig) -> None:
+    def __init__(
+        self,
+        config: InstrumentationConfig,
+        *,
+        agent_effort_capacity: float = 1.0,
+        mean_task_difficulty: float = 1.0,
+    ) -> None:
         self._config = config
+        self._agent_effort_capacity = max(agent_effort_capacity, 1e-9)
+        self._mean_task_difficulty = max(mean_task_difficulty, 1e-9)
+
         self._total_rewards: dict[AgentID, float] = {}
         self._events: list[dict[str, Any]] = []
 
@@ -48,6 +91,15 @@ class CooperativeMetricsCollector:
         # For episode summary
         self._stress_accumulator: float = 0.0
         self._step_count: int = 0
+
+        # ---- Step E: additional per-agent tracking ----
+        self._idle_count: dict[AgentID, int] = {}
+        self._work_count: dict[AgentID, int] = {}
+        self._work_effort: dict[AgentID, float] = {}   # total effort when working
+        self._effort_by_type: dict[AgentID, list[float]] = {}  # cumulative per task type
+        self._steps_on_type: dict[AgentID, dict[int, int]] = {}  # steps per task type
+        self._peak_spec: dict[AgentID, float] = {}     # max spec score any type
+        self._peak_stress: float = 0.0
 
     # ------------------------------------------------------------------
     # Step metrics
@@ -68,6 +120,33 @@ class CooperativeMetricsCollector:
 
         self._stress_accumulator += state.system_stress
         self._step_count += 1
+        self._peak_stress = max(self._peak_stress, state.system_stress)
+
+        # ---- Per-agent tracking (Step E) ----
+        num_types = state.num_task_types()
+        for aid, sr in results.items():
+            act = actions.get(aid, Action(task_type=None))
+            if act.is_idle:
+                self._idle_count[aid] = self._idle_count.get(aid, 0) + 1
+            else:
+                self._work_count[aid] = self._work_count.get(aid, 0) + 1
+                self._work_effort[aid] = self._work_effort.get(aid, 0.0) + act.effort_amount
+                # Effort by type
+                if aid not in self._effort_by_type:
+                    self._effort_by_type[aid] = [0.0] * num_types
+                tt = act.task_type
+                if tt is not None and 0 <= tt < len(self._effort_by_type[aid]):
+                    self._effort_by_type[aid][tt] += act.effort_amount
+                # Steps on type
+                if aid not in self._steps_on_type:
+                    self._steps_on_type[aid] = {}
+                if tt is not None:
+                    self._steps_on_type[aid][tt] = self._steps_on_type[aid].get(tt, 0) + 1
+
+            # Peak specialization
+            if aid in state.agents and state.agents[aid].specialization_score:
+                mx = max(state.agents[aid].specialization_score)
+                self._peak_spec[aid] = max(self._peak_spec.get(aid, 0.0), mx)
 
         # --- Event detection ---
         if self._config.enable_step_metrics or self._config.enable_episode_metrics:
@@ -195,12 +274,11 @@ class CooperativeMetricsCollector:
         termination_reason: TerminationReason | None,
         state: GlobalState,
     ) -> dict[str, Any]:
-        """Build episode-level summary metrics."""
+        """Build episode-level summary metrics (basic + Step E extended)."""
         if not self._config.enable_episode_metrics:
             return {}
 
         total_arrived = sum(state.tasks_completed_total)  # use completed as proxy
-        # More accurately: sum up arrivals tracked in state
         total_completed = sum(state.tasks_completed_total)
 
         completion_ratio = (
@@ -222,16 +300,173 @@ class CooperativeMetricsCollector:
             termination_reason == TerminationReason.SYSTEM_COLLAPSE
         )
 
-        return {
+        summary: dict[str, Any] = {
             "episode_length": episode_length,
             "termination_reason": termination_reason.value if termination_reason else None,
             "total_tasks_arrived": total_arrived,
             "total_tasks_completed": total_completed,
-            "completion_ratio": completion_ratio,
+            "completion_ratio": float(max(0.0, min(1.0, completion_ratio))),
             "final_backlog_level": state.backlog_level,
             "final_system_stress": state.system_stress,
             "mean_system_stress": mean_stress,
+            "peak_system_stress": self._peak_stress,
             "collapse_occurred": collapse_occurred,
             "total_reward_per_agent": dict(self._total_rewards),
             "mean_reward_per_step_per_agent": mean_reward_per_step,
         }
+
+        # ---- Step E: extended metrics ----
+        num_agents = state.num_agents()
+        num_types = state.num_task_types()
+
+        # --- Per-agent metrics ---
+        agent_metrics: dict[str, dict[str, Any]] = {}
+        for aid in state.agents.keys():
+            idle_c = self._idle_count.get(aid, 0)
+            work_c = self._work_count.get(aid, 0)
+            total_c = idle_c + work_c
+
+            idle_rate = idle_c / total_c if total_c > 0 else 0.0
+
+            # Effort utilization (mean effort / capacity when working)
+            effort_util = (
+                self._work_effort.get(aid, 0.0)
+                / (work_c * self._agent_effort_capacity)
+                if work_c > 0
+                else 0.0
+            )
+            effort_util = float(max(0.0, min(1.0, effort_util)))
+
+            # Dominant task type & fraction
+            eby_type = self._effort_by_type.get(aid, [])
+            total_effort = sum(eby_type)
+            if eby_type and total_effort > 0:
+                dominant_type = int(
+                    max(range(len(eby_type)), key=lambda i: eby_type[i])
+                )
+                dominant_type_fraction = eby_type[dominant_type] / total_effort
+            else:
+                dominant_type = None
+                dominant_type_fraction = 0.0
+
+            # Role stability (fraction of steps on dominant type)
+            steps_on = self._steps_on_type.get(aid, {})
+            if dominant_type is not None and total_c > 0:
+                role_stability = float(
+                    steps_on.get(dominant_type, 0) / total_c
+                )
+            else:
+                role_stability = 0.0
+            role_stability = max(0.0, min(1.0, role_stability))
+
+            # Specialization scores at episode end
+            spec_scores = state.agents[aid].specialization_score if aid in state.agents else []
+            if dominant_type is not None and dominant_type < len(spec_scores):
+                final_spec = float(spec_scores[dominant_type])
+            else:
+                final_spec = 0.0
+
+            peak_spec = float(self._peak_spec.get(aid, 0.0))
+
+            agent_metrics[aid] = {
+                "cumulative_reward": float(self._total_rewards.get(aid, 0.0)),
+                "mean_reward_per_step": float(
+                    self._total_rewards.get(aid, 0.0) / max(episode_length, 1)
+                ),
+                "effort_utilization": effort_util,
+                "idle_rate": float(max(0.0, min(1.0, idle_rate))),
+                "dominant_task_type": dominant_type,
+                "dominant_type_fraction": float(
+                    max(0.0, min(1.0, dominant_type_fraction))
+                ),
+                "final_specialization_score": float(
+                    max(0.0, min(1.0, final_spec))
+                ),
+                "peak_specialization_score": float(max(0.0, min(1.0, peak_spec))),
+                "role_stability": role_stability,
+                "strategy_label": "\u2014",  # placeholder — computed by clustering
+            }
+
+        # --- Social / group metrics ---
+        total_effort_per_agent = [
+            self._work_effort.get(aid, 0.0) for aid in state.agents.keys()
+        ]
+
+        effort_gini = _gini(total_effort_per_agent)
+        contribution_variance = _variance(total_effort_per_agent)
+
+        free_rider_count = sum(
+            1 for aid in state.agents.keys()
+            if agent_metrics[aid]["idle_rate"] >= _FREE_RIDER_IDLE_THRESHOLD
+        )
+        free_rider_fraction = (
+            free_rider_count / num_agents if num_agents > 0 else 0.0
+        )
+
+        dominant_types = [
+            agent_metrics[aid]["dominant_task_type"]
+            for aid in state.agents.keys()
+            if agent_metrics[aid]["dominant_task_type"] is not None
+        ]
+        if len(dominant_types) >= 2:
+            pairs_total = len(dominant_types) * (len(dominant_types) - 1) / 2
+            diff_pairs = sum(
+                1
+                for i in range(len(dominant_types))
+                for j in range(i + 1, len(dominant_types))
+                if dominant_types[i] != dominant_types[j]
+            )
+            specialization_divergence = (
+                diff_pairs / pairs_total if pairs_total > 0 else 0.0
+            )
+        else:
+            specialization_divergence = 0.0
+
+        mean_role_stability = (
+            sum(agent_metrics[aid]["role_stability"] for aid in state.agents.keys())
+            / num_agents
+            if num_agents > 0
+            else 0.0
+        )
+
+        # Group efficiency ratio
+        if (
+            num_agents > 0
+            and episode_length > 0
+            and self._agent_effort_capacity > 0
+            and self._mean_task_difficulty > 0
+        ):
+            theoretical_max = (
+                num_agents
+                * self._agent_effort_capacity
+                * episode_length
+                / self._mean_task_difficulty
+            )
+            group_efficiency_ratio = float(
+                min(1.0, total_completed / theoretical_max)
+                if theoretical_max > 0
+                else 0.0
+            )
+        else:
+            group_efficiency_ratio = 0.0
+
+        summary.update({
+            "group_efficiency_ratio": max(0.0, min(1.0, group_efficiency_ratio)),
+            "contribution_variance": float(contribution_variance),
+            "specialization_divergence": float(
+                max(0.0, min(1.0, specialization_divergence))
+            ),
+            "mean_role_stability": float(
+                max(0.0, min(1.0, mean_role_stability))
+            ),
+            "free_rider_count": free_rider_count,
+            "free_rider_fraction": float(
+                max(0.0, min(1.0, free_rider_fraction))
+            ),
+            "effort_gini_coefficient": float(
+                max(0.0, min(1.0, effort_gini))
+            ),
+            "agent_metrics": agent_metrics,
+        })
+
+        return summary

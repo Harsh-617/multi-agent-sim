@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.api.routes_config import router as config_router
+from backend.api.routes_cooperative import router as cooperative_router
 from backend.api.routes_experiment import router as experiment_router
 from backend.api.routes_history import router as history_router
 from backend.api.routes_competitive_league import router as competitive_league_router
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Multi-Agent Simulation", version="0.1.0", lifespan=lifespan)
 
 app.include_router(competitive_league_router)
+app.include_router(cooperative_router)
 app.include_router(competitive_reports_router)
 app.include_router(config_router)
 app.include_router(experiment_router)
