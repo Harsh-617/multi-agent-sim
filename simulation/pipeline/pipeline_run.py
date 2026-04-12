@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
 from simulation.config.defaults import default_config
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.evaluation.reporting import write_robustness_report
@@ -167,8 +168,12 @@ def run_pipeline(
     else:
         config_path = configs_dir / f"{config_id}.json"
         raw = config_path.read_text(encoding="utf-8")
-        config = MixedEnvironmentConfig.model_validate_json(raw)
         config_dict = json.loads(raw)
+        env_type = config_dict.get("identity", {}).get("environment_type", "mixed")
+        if env_type == "cooperative":
+            config = CooperativeEnvironmentConfig.model_validate(config_dict)
+        else:
+            config = MixedEnvironmentConfig.model_validate_json(raw)
 
     base_seed = config.identity.seed
     eval_seeds = [base_seed + i for i in range(seeds)]

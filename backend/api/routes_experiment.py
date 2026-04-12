@@ -10,9 +10,11 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from simulation.config.competitive_schema import CompetitiveEnvironmentConfig
+from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.league.registry import LeagueRegistry
 from simulation.runner.competitive_experiment_runner import run_competitive_experiment
+from simulation.runner.cooperative_experiment_runner import run_cooperative_experiment
 
 from backend.runner.experiment_runner import run_experiment
 from backend.runner.run_manager import manager
@@ -87,6 +89,18 @@ async def start_run(req: StartRunRequest) -> StartRunResponse:
             )
 
         task = asyncio.create_task(_run_competitive())
+    elif env_type == "cooperative":
+        config = CooperativeEnvironmentConfig.model_validate(raw_data)
+
+        async def _run_cooperative() -> dict:
+            return run_cooperative_experiment(
+                config, run_id, RUNS_DIR, manager,
+                agent_policy=req.agent_policy,
+                agent_kwargs=agent_kwargs,
+                config_id=req.config_id,
+            )
+
+        task = asyncio.create_task(_run_cooperative())
     else:
         config = MixedEnvironmentConfig.model_validate_json(raw_text)
         task = asyncio.create_task(

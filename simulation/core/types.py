@@ -38,9 +38,10 @@ class StepResult:
 # ---------------------------------------------------------------------------
 
 class TerminationReason(Enum):
-    """Why an episode ended.  V1 supports exactly three reasons."""
+    """Why an episode ended."""
 
     MAX_STEPS = "max_steps"
     SYSTEM_COLLAPSE = "system_collapse"
     NO_ACTIVE_AGENTS = "no_active_agents"
     ELIMINATION = "elimination"
+    PERFECT_CLEARANCE = "perfect_clearance"  # Cooperative archetype: zero backlog sustained

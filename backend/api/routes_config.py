@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 from fastapi import APIRouter, HTTPException, Request
 
 from simulation.config.competitive_schema import CompetitiveEnvironmentConfig
+from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
 from simulation.config.schema import MixedEnvironmentConfig
 
 from backend.schemas.api_models import ConfigCreatedResponse, ConfigListItem
@@ -39,6 +40,8 @@ async def create_config(request: Request) -> ConfigCreatedResponse:
 
     if env_type == "competitive":
         config = CompetitiveEnvironmentConfig.model_validate(body)
+    elif env_type == "cooperative":
+        config = CooperativeEnvironmentConfig.model_validate(body)
     else:
         config = MixedEnvironmentConfig.model_validate(body)
 
