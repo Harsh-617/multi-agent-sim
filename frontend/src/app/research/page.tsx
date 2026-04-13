@@ -10,10 +10,10 @@ import Link from "next/link";
 interface ReportEntry {
   report_id: string;
   timestamp: string;
-  archetype: "Resource Sharing" | "Head-to-Head";
+  archetype: "Resource Sharing" | "Head-to-Head" | "Cooperative";
 }
 
-type ArchetypeFilter = "All" | "Resource Sharing" | "Head-to-Head";
+type ArchetypeFilter = "All" | "Resource Sharing" | "Head-to-Head" | "Cooperative";
 type TypeFilter = "All" | "Robustness" | "Strategy" | "Benchmark";
 type SortMode = "latest" | "robustness";
 
@@ -96,17 +96,22 @@ function Pill({
   );
 }
 
-function ArchetypeBadge({ archetype }: { archetype: "Resource Sharing" | "Head-to-Head" }) {
-  const isTeal = archetype === "Resource Sharing";
+function ArchetypeBadge({ archetype }: { archetype: "Resource Sharing" | "Head-to-Head" | "Cooperative" }) {
+  const color =
+    archetype === "Resource Sharing"
+      ? { bg: "var(--accent-subtle)", fg: "var(--accent)", border: "var(--accent-border)" }
+      : archetype === "Head-to-Head"
+      ? { bg: "rgba(249,115,22,0.1)", fg: "#f97316", border: "rgba(249,115,22,0.2)" }
+      : { bg: "rgba(139,92,246,0.1)", fg: "#8b5cf6", border: "rgba(139,92,246,0.2)" };
   return (
     <span
       style={{
         fontSize: 11,
         borderRadius: 4,
         padding: "2px 8px",
-        background: isTeal ? "var(--accent-subtle)" : "rgba(249,115,22,0.1)",
-        color: isTeal ? "var(--accent)" : "#f97316",
-        border: `1px solid ${isTeal ? "var(--accent-border)" : "rgba(249,115,22,0.2)"}`,
+        background: color.bg,
+        color: color.fg,
+        border: `1px solid ${color.border}`,
       }}
     >
       {archetype}
@@ -205,10 +210,13 @@ function ReportCard({ report }: { report: ReportEntry }) {
 export default function ResearchPage() {
   const [mixedReports, setMixedReports] = useState<ReportEntry[]>([]);
   const [compReports, setCompReports] = useState<ReportEntry[]>([]);
+  const [coopReports, setCoopReports] = useState<ReportEntry[]>([]);
   const [loadingMixed, setLoadingMixed] = useState(true);
   const [loadingComp, setLoadingComp] = useState(true);
+  const [loadingCoop, setLoadingCoop] = useState(true);
   const [errorMixed, setErrorMixed] = useState(false);
   const [errorComp, setErrorComp] = useState(false);
+  const [errorCoop, setErrorCoop] = useState(false);
 
   const [archetypeFilter, setArchetypeFilter] = useState<ArchetypeFilter>("All");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
@@ -242,13 +250,27 @@ export default function ResearchPage() {
       )
       .catch(() => setErrorComp(true))
       .finally(() => setLoadingComp(false));
+
+    fetch("/api/cooperative/reports")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: { report_id: string; timestamp: string }[]) =>
+        setCoopReports(
+          data.map((d) => ({
+            report_id: d.report_id,
+            timestamp: d.timestamp,
+            archetype: "Cooperative" as const,
+          })),
+        ),
+      )
+      .catch(() => setErrorCoop(true))
+      .finally(() => setLoadingCoop(false));
   }, []);
 
-  const loading = loadingMixed || loadingComp;
-  const bothErrored = errorMixed && errorComp;
+  const loading = loadingMixed || loadingComp || loadingCoop;
+  const bothErrored = errorMixed && errorComp && errorCoop;
 
   // Merge and filter
-  let merged = [...mixedReports, ...compReports];
+  let merged = [...mixedReports, ...compReports, ...coopReports];
 
   if (archetypeFilter !== "All") {
     merged = merged.filter((r) => r.archetype === archetypeFilter);
@@ -316,7 +338,7 @@ export default function ResearchPage() {
         <div>
           <div style={filterLabel}>Environment</div>
           <div style={{ display: "flex", gap: 6 }}>
-            {(["All", "Resource Sharing", "Head-to-Head"] as ArchetypeFilter[]).map((v) => (
+            {(["All", "Resource Sharing", "Head-to-Head", "Cooperative"] as ArchetypeFilter[]).map((v) => (
               <Pill
                 key={v}
                 label={v}

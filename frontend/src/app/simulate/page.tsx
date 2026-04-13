@@ -25,6 +25,7 @@ const COMPETITIVE_ONLY = new Set([
 function useRunCounts() {
   const [resourceRuns, setResourceRuns] = useState<string>("—");
   const [headToHeadRuns, setHeadToHeadRuns] = useState<string>("—");
+  const [cooperativeRuns, setCooperativeRuns] = useState<string>("—");
 
   useEffect(() => {
     fetch("/api/runs/history")
@@ -48,9 +49,14 @@ function useRunCounts() {
         setResourceRuns("—");
         setHeadToHeadRuns("—");
       });
+
+    fetch("/api/cooperative/runs")
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: unknown[]) => setCooperativeRuns(String(data.length)))
+      .catch(() => setCooperativeRuns("—"));
   }, []);
 
-  return { resourceRuns, headToHeadRuns };
+  return { resourceRuns, headToHeadRuns, cooperativeRuns };
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +148,11 @@ function HeroCard({
   const [hoverBtn, setHoverBtn] = useState(false);
 
   const hoverColor =
-    accentColor === "var(--accent)" ? "var(--accent-hover)" : "#ea580c";
+    accentColor === "var(--accent)"
+      ? "var(--accent-hover)"
+      : accentColor === "#f97316"
+      ? "#ea580c"
+      : "#7c3aed";
 
   return (
     <div
@@ -283,7 +293,7 @@ function AdvancedCard({
 
 export default function SimulatePage() {
   const [tab, setTab] = useState<"templates" | "advanced">("templates");
-  const { resourceRuns, headToHeadRuns } = useRunCounts();
+  const { resourceRuns, headToHeadRuns, cooperativeRuns } = useRunCounts();
 
   return (
     <main
@@ -379,6 +389,17 @@ export default function SimulatePage() {
               membersUrl="/api/competitive/league/members"
               href="/simulate/head-to-head"
             />
+            <HeroCard
+              title="Cooperative Task Simulation"
+              subtitle="Agents share a task queue and coordinate effort to prevent system collapse. Emergent specialization and free-rider dynamics unfold over time."
+              tags={["Coordination", "Specialization", "Collective Goal"]}
+              accentColor="#8b5cf6"
+              accentSubtle="rgba(139,92,246,0.1)"
+              accentBorder="rgba(139,92,246,0.2)"
+              runs={cooperativeRuns}
+              membersUrl="/api/cooperative/league/members"
+              href="/simulate/cooperative"
+            />
           </div>
 
           {/* Coming soon */}
@@ -463,6 +484,13 @@ export default function SimulatePage() {
               accentColor="#f97316"
               accentSubtle="rgba(249,115,22,0.1)"
               href="/simulate/head-to-head?mode=advanced"
+            />
+            <AdvancedCard
+              title="Cooperative"
+              description="Cooperative archetype — shared task queue, collective goal, specialization."
+              accentColor="#8b5cf6"
+              accentSubtle="rgba(139,92,246,0.1)"
+              href="/simulate/cooperative?mode=advanced"
             />
           </div>
         </>

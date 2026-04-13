@@ -37,18 +37,32 @@ import {
   getCompetitivePipelineStatus,
   getConfigDetail,
   PipelineStatusResponse,
+  CooperativeLeagueMember,
+  CooperativeLineageMember,
+  CooperativeEvolutionResponse,
+  CooperativeChampionInfo,
+  CooperativeRobustnessHeatmapResponse,
+  getCooperativeLeagueMembers,
+  getCooperativeLeagueLineage,
+  getCooperativeLeagueEvolution,
+  getCooperativeChampion,
+  runCooperativeChampionRobustness,
+  getCooperativeRobustnessStatus,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
 import ChampionRobustness from "@/components/ChampionRobustness";
 import LeagueEvolution from "@/components/LeagueEvolution";
 import LineageGraph from "@/components/LineageGraph";
+import CooperativeLeagueLineage from "@/components/CooperativeLeagueLineage";
+import CooperativeChampionBenchmark from "@/components/CooperativeChampionBenchmark";
+import CooperativeChampionRobustness from "@/components/CooperativeChampionRobustness";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Archetype = "resource-sharing" | "head-to-head";
+type Archetype = "resource-sharing" | "head-to-head" | "cooperative";
 type Tab = "ratings" | "champion" | "evolution";
 
 // ---------------------------------------------------------------------------
@@ -506,6 +520,22 @@ export default function LeaguePage() {
   const [hhPipelineError, setHhPipelineError] = useState<string | null>(null);
   const [hhPipelineReportId, setHhPipelineReportId] = useState<string | null>(null);
 
+  // --- Cooperative state ---
+  const [coopMembers, setCoopMembers] = useState<CooperativeLeagueMember[]>([]);
+  const [coopLineage, setCoopLineage] = useState<CooperativeLineageMember[]>([]);
+  const [coopEvolution, setCoopEvolution] = useState<CooperativeEvolutionResponse>({ members: [], champion_history: [] });
+  const [coopChampion, setCoopChampion] = useState<CooperativeChampionInfo | null>(null);
+  const [coopRobData, setCoopRobData] = useState<CooperativeRobustnessHeatmapResponse | null>(null);
+  const [coopLoading, setCoopLoading] = useState(true);
+  const [coopError, setCoopError] = useState<string | null>(null);
+  const [coopRobRunning, setCoopRobRunning] = useState(false);
+  const [coopRobId, setCoopRobId] = useState<string | null>(null);
+  const [coopRobStage, setCoopRobStage] = useState<string | null>(null);
+  const [coopRobReportId, setCoopRobReportId] = useState<string | null>(null);
+  const [coopRobSeeds, setCoopRobSeeds] = useState(3);
+  const [coopRobEpisodesPerSeed, setCoopRobEpisodesPerSeed] = useState(2);
+  const [coopRobSeed, setCoopRobSeed] = useState(42);
+
   // --- Pipeline config state (per archetype) ---
   const [rsPipelineConfig, setRsPipelineConfig] = useState<PipelineConfig>({
     totalTimesteps: 50000,
@@ -568,9 +598,32 @@ export default function LeaguePage() {
     }
   }
 
+  // --- Load Cooperative data ---
+  async function loadCooperative() {
+    setCoopLoading(true);
+    setCoopError(null);
+    try {
+      const [m, lin, evo, champ] = await Promise.all([
+        getCooperativeLeagueMembers(),
+        getCooperativeLeagueLineage(),
+        getCooperativeLeagueEvolution(),
+        getCooperativeChampion().catch(() => null),
+      ]);
+      setCoopMembers(m);
+      setCoopLineage(lin.members);
+      setCoopEvolution(evo);
+      setCoopChampion(champ);
+    } catch (e) {
+      setCoopError(String(e));
+    } finally {
+      setCoopLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadResourceSharing();
     loadHeadToHead();
+    loadCooperative();
   }, []);
 
   // Filter hhConfigs to only competitive configs for inline HH dropdowns
@@ -728,6 +781,27 @@ export default function LeaguePage() {
     }
   }
 
+  async function handleCoopRobustness() {
+    setCoopRobRunning(true);
+    setCoopError(null);
+    setCoopRobId(null);
+    setCoopRobStage(null);
+    setCoopRobReportId(null);
+    setCoopRobData(null);
+    try {
+      const resp = await runCooperativeChampionRobustness({
+        seeds: coopRobSeeds,
+        episodes_per_seed: coopRobEpisodesPerSeed,
+        seed: coopRobSeed,
+      });
+      setCoopRobId(resp.robustness_id);
+      setCoopRobStage("loading_config");
+    } catch (e) {
+      setCoopError(String(e));
+      setCoopRobRunning(false);
+    }
+  }
+
   // --- Pipeline handlers ---
   async function handleStartRsPipeline() {
     try {
@@ -833,13 +907,39 @@ export default function LeaguePage() {
     return () => clearInterval(interval);
   }, [hhRobId, hhRobStage]);
 
+  // Cooperative robustness polling
+  useEffect(() => {
+    if (!coopRobId || coopRobStage === "done" || coopRobStage === "error") return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getCooperativeRobustnessStatus(coopRobId);
+        setCoopRobStage(status.stage);
+        if (status.error) {
+          setCoopError(status.error);
+          setCoopRobRunning(false);
+        }
+        if (status.report_id) setCoopRobReportId(status.report_id);
+        if (status.stage === "done" || status.stage === "error") {
+          setCoopRobRunning(false);
+          clearInterval(interval);
+        }
+      } catch {
+        clearInterval(interval);
+        setCoopRobRunning(false);
+        setCoopRobStage("error");
+        setCoopError("Lost connection to server — check if backend is running");
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [coopRobId, coopRobStage]);
+
   // --- Derived values ---
   const isRS = archetype === "resource-sharing";
-  const loading = isRS ? rsLoading : hhLoading;
-  const error = isRS ? rsError : hhError;
+  const isCoop = archetype === "cooperative";
+  const loading = isCoop ? coopLoading : (isRS ? rsLoading : hhLoading);
+  const error = isCoop ? coopError : (isRS ? rsError : hhError);
   const recomputing = isRS ? rsRecomputing : hhRecomputing;
-  const members = isRS ? rsMembers : hhMembers;
-  const ratings = isRS ? rsRatings : hhRatings;
+  const members = isCoop ? coopMembers : (isRS ? rsMembers : hhMembers);
 
   // Sorted members for ratings tab
   const rsSorted = [...rsMembers].sort((a, b) => {
@@ -1038,55 +1138,80 @@ export default function LeaguePage() {
         >
           Head-to-Head
         </button>
+        <button
+          style={archetype === "cooperative" ? pillActive : pillInactive}
+          onClick={() => handleArchetypeSwitch("cooperative")}
+          onMouseEnter={(e) => {
+            if (archetype !== "cooperative") {
+              e.currentTarget.style.color = "var(--text-primary)";
+              e.currentTarget.style.borderColor = "var(--accent)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (archetype !== "cooperative") {
+              e.currentTarget.style.color = "var(--text-secondary)";
+              e.currentTarget.style.borderColor = "var(--bg-border)";
+            }
+          }}
+        >
+          Cooperative
+        </button>
 
-        {/* Recompute Ratings button */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={isRS ? handleRsRecompute : handleHhRecompute}
-            disabled={recomputing || members.length === 0}
-            style={{
-              padding: "6px 12px",
-              background: recomputing ? "var(--bg-elevated)" : "var(--accent)",
-              color: recomputing ? "var(--text-tertiary)" : "#fff",
-              borderRadius: 6,
-              border: "none",
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: recomputing || members.length === 0 ? "default" : "pointer",
-              opacity: recomputing || members.length === 0 ? 0.5 : 1,
-            }}
-          >
-            {recomputing ? "Recomputing..." : "Recompute Ratings"}
-          </button>
-          {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "running" && (
-            <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Recomputing...</span>
-          )}
-          {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "success" && (
-            <span style={{ fontSize: 12, color: "var(--accent)" }}>&#10003; Ratings updated</span>
-          )}
-          {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "error" && (
-            <span style={{ fontSize: 12, color: "#f87171" }}>Failed to recompute</span>
-          )}
-        </div>
+        {/* Recompute Ratings button — only for RS and HH */}
+        {!isCoop && (
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={isRS ? handleRsRecompute : handleHhRecompute}
+              disabled={recomputing || members.length === 0}
+              style={{
+                padding: "6px 12px",
+                background: recomputing ? "var(--bg-elevated)" : "var(--accent)",
+                color: recomputing ? "var(--text-tertiary)" : "#fff",
+                borderRadius: 6,
+                border: "none",
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: recomputing || members.length === 0 ? "default" : "pointer",
+                opacity: recomputing || members.length === 0 ? 0.5 : 1,
+              }}
+            >
+              {recomputing ? "Recomputing..." : "Recompute Ratings"}
+            </button>
+            {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "running" && (
+              <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Recomputing...</span>
+            )}
+            {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "success" && (
+              <span style={{ fontSize: 12, color: "var(--accent)" }}>&#10003; Ratings updated</span>
+            )}
+            {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "error" && (
+              <span style={{ fontSize: 12, color: "#f87171" }}>Failed to recompute</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--bg-border)", marginBottom: "32px" }}>
-        {(["ratings", "champion", "evolution"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            style={tab === t ? subTabActive : subTabInactive}
-            onClick={() => setTab(t)}
-            onMouseEnter={(e) => {
-              if (tab !== t) e.currentTarget.style.color = "var(--text-primary)";
-            }}
-            onMouseLeave={(e) => {
-              if (tab !== t) e.currentTarget.style.color = "var(--text-secondary)";
-            }}
-          >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
+        {(["ratings", "champion", "evolution"] as Tab[]).map((t) => {
+          const label = isCoop
+            ? t === "ratings" ? "Lineage" : t === "champion" ? "Champion" : "Evolution"
+            : t.charAt(0).toUpperCase() + t.slice(1);
+          return (
+            <button
+              key={t}
+              style={tab === t ? subTabActive : subTabInactive}
+              onClick={() => setTab(t)}
+              onMouseEnter={(e) => {
+                if (tab !== t) e.currentTarget.style.color = "var(--text-primary)";
+              }}
+              onMouseLeave={(e) => {
+                if (tab !== t) e.currentTarget.style.color = "var(--text-secondary)";
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {error && <p style={{color: "#f87171", marginBottom: 8, fontSize: 13}}>{error}</p>}
@@ -1593,6 +1718,168 @@ export default function LeaguePage() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ============================================================ */}
+          {/* COOPERATIVE CONTENT                                           */}
+          {/* ============================================================ */}
+          {isCoop && (
+            <>
+              {/* Lineage tab (= ratings) */}
+              {tab === "ratings" && (
+                coopLineage.length === 0 ? (
+                  <p style={{ color: "var(--text-secondary)" }}>
+                    No league members yet — run the cooperative pipeline first.
+                  </p>
+                ) : (
+                  <CooperativeLeagueLineage members={coopLineage} />
+                )
+              )}
+
+              {/* Champion tab */}
+              {tab === "champion" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                  {/* Champion info */}
+                  {coopChampion && coopChampion.member_id ? (
+                    <div style={{ border: "1px solid var(--bg-border)", borderRadius: 6, padding: 16, fontSize: 13 }}>
+                      <h3 style={{ fontWeight: 600, marginBottom: 8 }}>Current Champion</h3>
+                      <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 24, rowGap: 4 }}>
+                        <dt style={{ color: "var(--text-secondary)" }}>Member ID</dt>
+                        <dd style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{coopChampion.member_id}</dd>
+                        <dt style={{ color: "var(--text-secondary)" }}>Rating</dt>
+                        <dd style={{ fontFamily: "var(--font-mono)" }}>
+                          {coopChampion.rating != null ? coopChampion.rating.toFixed(1) : "—"}
+                        </dd>
+                        <dt style={{ color: "var(--text-secondary)" }}>Parent</dt>
+                        <dd style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                          {coopChampion.parent_id ?? "none"}
+                        </dd>
+                      </dl>
+                    </div>
+                  ) : (
+                    <p style={{ color: "var(--text-secondary)" }}>
+                      No league members yet — run the cooperative pipeline first.
+                    </p>
+                  )}
+
+                  {/* Benchmark results */}
+                  <div>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Champion Benchmark</h3>
+                    <CooperativeChampionBenchmark
+                      champion={coopChampion && coopChampion.member_id
+                        ? { member_id: coopChampion.member_id, rating: coopChampion.rating ?? 0 }
+                        : null}
+                      results={[]}
+                    />
+                  </div>
+
+                  {/* Robustness */}
+                  <div>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Run Robustness on Champion</h3>
+                    {coopMembers.length === 0 ? (
+                      <p style={{ color: "var(--text-secondary)" }}>
+                        No league members yet — run the cooperative pipeline first.
+                      </p>
+                    ) : (
+                      <>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Seeds</label>
+                            <input
+                              type="number" min={1} max={20} value={coopRobSeeds}
+                              onChange={(e) => setCoopRobSeeds(Number(e.target.value))}
+                              style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 64, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Episodes/seed</label>
+                            <input
+                              type="number" min={1} max={10} value={coopRobEpisodesPerSeed}
+                              onChange={(e) => setCoopRobEpisodesPerSeed(Number(e.target.value))}
+                              style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 64, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Seed</label>
+                            <input
+                              type="number" value={coopRobSeed}
+                              onChange={(e) => setCoopRobSeed(Number(e.target.value))}
+                              style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 80, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                            />
+                          </div>
+                          <button
+                            onClick={handleCoopRobustness}
+                            disabled={coopRobRunning || coopMembers.length === 0}
+                            style={{ padding: "4px 12px", background: "#8b5cf6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: (coopRobRunning || coopMembers.length === 0) ? 0.5 : 1 }}
+                          >
+                            {coopRobRunning ? "Running..." : "Run Robustness"}
+                          </button>
+                        </div>
+                        {coopRobRunning && coopRobStage && (
+                          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 8 }}>
+                            {coopRobStage === "loading_config" && "Loading configuration..."}
+                            {coopRobStage === "evaluating" && "Running robustness sweeps..."}
+                            {coopRobStage === "writing_report" && "Generating report..."}
+                          </p>
+                        )}
+                        {coopRobStage === "done" && coopRobReportId && (
+                          <p style={{ fontSize: 13, color: "var(--accent)", marginTop: 8 }}>
+                            Complete!{" "}
+                            <a href={`/research/${encodeURIComponent(coopRobReportId)}`} style={{ textDecoration: "underline", fontWeight: 500 }}>
+                              View report &rarr;
+                            </a>
+                          </p>
+                        )}
+                        {coopRobData && <CooperativeChampionRobustness data={coopRobData} />}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Evolution tab */}
+              {tab === "evolution" && (
+                <div>
+                  {coopEvolution.members.length === 0 && coopEvolution.champion_history.length === 0 ? (
+                    <p style={{ color: "var(--text-tertiary)" }}>
+                      No evolution data yet. Train and save snapshots to build history.
+                    </p>
+                  ) : (
+                    <LineageGraph nodes={coopEvolution.members.map((m) => ({
+                      id: m.member_id,
+                      parent_id: m.parent_id,
+                      rating: m.rating,
+                      label: m.strategy?.label,
+                      cluster: m.strategy?.cluster_id,
+                      robustness: m.robustness_score,
+                      created_at: m.created_at,
+                      notes: m.notes,
+                    }))} />
+                  )}
+                  {coopEvolution.champion_history.length > 0 && (
+                    <div style={{ marginTop: 32 }}>
+                      <h3 style={{ fontSize: 13, fontWeight: 500, color: "#888888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 16 }}>
+                        Champion History
+                      </h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
+                        {coopEvolution.champion_history.map((entry, idx) => (
+                          <div key={entry.member_id} style={{ border: "1px solid var(--bg-border)", borderRadius: 6, padding: "10px 14px", fontSize: 13 }}>
+                            <span style={{ color: "var(--text-tertiary)", marginRight: 8 }}>#{idx + 1}</span>
+                            <span style={{ fontFamily: "var(--font-mono)" }}>{entry.member_id}</span>
+                            <span style={{ marginLeft: 12, color: "var(--text-secondary)" }}>
+                              rating {entry.rating.toFixed(1)}
+                            </span>
+                            {entry.label && (
+                              <span style={{ marginLeft: 12, fontSize: 11, color: "var(--text-tertiary)" }}>{entry.label}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
