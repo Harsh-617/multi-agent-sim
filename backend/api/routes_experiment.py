@@ -26,6 +26,7 @@ router = APIRouter(prefix="/api/runs", tags=["runs"])
 CONFIGS_DIR = STORAGE_ROOT / "configs"
 RUNS_DIR = STORAGE_ROOT / "runs"
 PPO_AGENT_DIR = STORAGE_ROOT / "agents/ppo_shared"
+COOPERATIVE_PPO_AGENT_DIR = STORAGE_ROOT / "agents/cooperative/ppo_shared"
 LEAGUE_ROOT = STORAGE_ROOT / "agents/league"
 
 
@@ -46,6 +47,14 @@ async def start_run(req: StartRunRequest) -> StartRunResponse:
                 status_code=422,
                 detail="PPO artifacts not found in storage/agents/ppo_shared/. "
                        "Train a policy first with: python -m simulation.training.ppo_shared",
+            )
+
+    if req.agent_policy == "cooperative_ppo":
+        if not (COOPERATIVE_PPO_AGENT_DIR / "policy.pt").exists() or not (COOPERATIVE_PPO_AGENT_DIR / "metadata.json").exists():
+            raise HTTPException(
+                status_code=422,
+                detail="Cooperative PPO artifacts not found in storage/agents/cooperative/ppo_shared/. "
+                       "Train a policy first with: python -m simulation.training.cooperative_train",
             )
 
     # Validate league snapshot

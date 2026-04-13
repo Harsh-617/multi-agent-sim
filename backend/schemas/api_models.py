@@ -47,6 +47,7 @@ class StartRunRequest(BaseModel):
         "random", "always_cooperate", "always_extract", "tit_for_tat",
         "ppo_shared", "league_snapshot",
         "always_attack", "always_build", "always_defend", "competitive_ppo",
+        "always_work", "always_idle", "specialist", "balancer", "cooperative_ppo",
     ] = Field(
         default="random",
         description="Agent policy to use for all agents in the run.",

@@ -34,12 +34,16 @@ type CoopPolicy =
   | "random"
   | "always_work"
   | "always_idle"
+  | "specialist"
+  | "balancer"
   | "cooperative_ppo";
 
 const COOP_POLICIES: CoopPolicy[] = [
   "random",
   "always_work",
   "always_idle",
+  "specialist",
+  "balancer",
   "cooperative_ppo",
 ];
 
@@ -367,6 +371,18 @@ export default function CooperativePage() {
         paddingTop: 96,
       }}
     >
+      {/* Back link */}
+      <Link
+        href="/simulate"
+        style={{
+          fontSize: 13,
+          color: "var(--text-tertiary)",
+          textDecoration: "none",
+        }}
+      >
+        ← Simulate
+      </Link>
+
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1

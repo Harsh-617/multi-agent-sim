@@ -57,3 +57,5 @@ Thumbs.db
 CLAUDE.md
 graphify-out/
 .graphify_detect.json
+.graphify_uncached.txt
+.graphify_python
