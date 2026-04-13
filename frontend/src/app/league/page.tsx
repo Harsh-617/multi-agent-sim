@@ -48,6 +48,8 @@ import {
   getCooperativeChampion,
   runCooperativeChampionRobustness,
   getCooperativeRobustnessStatus,
+  startCooperativePipeline,
+  getCooperativePipelineStatus,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
@@ -549,6 +551,16 @@ export default function LeaguePage() {
     seed: 42,
   });
 
+  const [coopPipelineId, setCoopPipelineId] = useState<string | null>(null);
+  const [coopPipelineStage, setCoopPipelineStage] = useState<string | null>(null);
+  const [coopPipelineError, setCoopPipelineError] = useState<string | null>(null);
+  const [coopPipelineReportId, setCoopPipelineReportId] = useState<string | null>(null);
+  const [coopPipelineConfig, setCoopPipelineConfig] = useState<PipelineConfig>({
+    totalTimesteps: 50000,
+    snapshotEvery: 10000,
+    seed: 42,
+  });
+
   // --- Load Resource Sharing data ---
   async function loadResourceSharing() {
     setRsLoading(true);
@@ -840,6 +852,24 @@ export default function LeaguePage() {
     }
   }
 
+  async function handleStartCoopPipeline() {
+    try {
+      const { pipeline_id } = await startCooperativePipeline({
+        total_timesteps: coopPipelineConfig.totalTimesteps,
+        snapshot_every_timesteps: coopPipelineConfig.snapshotEvery,
+        seed: coopPipelineConfig.seed,
+        episodes_per_seed: 2,
+        seeds: 3,
+      });
+      setCoopPipelineId(pipeline_id);
+      setCoopPipelineStage("loading_config");
+      setCoopPipelineError(null);
+      setCoopPipelineReportId(null);
+    } catch (e) {
+      setCoopPipelineError(String(e));
+    }
+  }
+
   // Pipeline polling
   useEffect(() => {
     if (!rsPipelineId || rsPipelineStage === "done" || rsPipelineStage === "error") return;
@@ -880,6 +910,26 @@ export default function LeaguePage() {
     }, 2000);
     return () => clearInterval(interval);
   }, [hhPipelineId, hhPipelineStage]);
+
+  useEffect(() => {
+    if (!coopPipelineId || coopPipelineStage === "done" || coopPipelineStage === "error") return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getCooperativePipelineStatus(coopPipelineId);
+        setCoopPipelineStage(status.stage);
+        if (status.error) setCoopPipelineError(status.error);
+        if (status.report_id) setCoopPipelineReportId(status.report_id);
+        if (status.stage === "done" || status.stage === "error") {
+          clearInterval(interval);
+        }
+      } catch {
+        setCoopPipelineStage("error");
+        setCoopPipelineError("Lost connection to server — check if backend is running");
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [coopPipelineId, coopPipelineStage]);
 
   // Competitive robustness polling
   useEffect(() => {
@@ -1062,10 +1112,10 @@ export default function LeaguePage() {
           </div>
         </div>
 
-        {/* Two archetype pipeline sections side by side */}
+        {/* Three archetype pipeline sections side by side */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "1fr 1fr 1fr",
           gap: 16,
         }}>
           {/* Resource Sharing pipeline */}
@@ -1096,6 +1146,21 @@ export default function LeaguePage() {
               hhPipelineStage !== "error"}
             config={hhPipelineConfig}
             onConfigChange={setHhPipelineConfig}
+          />
+
+          {/* Cooperative pipeline */}
+          <PipelinePanel
+            label="Cooperative"
+            accentColor="#14b8a6"
+            stage={coopPipelineStage}
+            error={coopPipelineError}
+            reportId={coopPipelineReportId}
+            onRun={handleStartCoopPipeline}
+            running={coopPipelineStage !== null &&
+              coopPipelineStage !== "done" &&
+              coopPipelineStage !== "error"}
+            config={coopPipelineConfig}
+            onConfigChange={setCoopPipelineConfig}
           />
         </div>
       </div>
@@ -1341,7 +1406,7 @@ export default function LeaguePage() {
           {/* ============================================================ */}
           {/* HEAD-TO-HEAD CONTENT                                          */}
           {/* ============================================================ */}
-          {!isRS && (
+          {archetype === "head-to-head" && (
             <>
               {/* Ratings tab */}
               {tab === "ratings" &&
