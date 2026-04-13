@@ -9,10 +9,13 @@
  * During a live run: CooperativeMetricsChart receives WebSocket step data.
  * After a run: CooperativeRunSummary is shown.
  * Each past run row links to its replay page.
+ *
+ * ?mode=advanced — reveals all advanced cooperative schema parameters.
  */
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 
 import {
   getCooperativeRuns,
@@ -88,12 +91,35 @@ const selectStyle: React.CSSProperties = {
 // Create a cooperative config via the generic /api/configs endpoint
 // ---------------------------------------------------------------------------
 
-async function createCoopConfig(params: {
+interface CoopConfigParams {
   numAgents: number;
   maxSteps: number;
   seed: number;
   numTaskTypes: number;
-}): Promise<{ config_id: string }> {
+  // advanced
+  agentEffortCapacity: number;
+  collapseSustainWindow: number;
+  enableEarlySuccess: boolean;
+  clearanceSustainWindow: number;
+  observationNoise: number;
+  historyWindow: number;
+  specializationScale: number;
+  specializationDecay: number;
+  taskArrivalNoise: number;
+  taskDifficultyVariance: number;
+  freeRiderPressureScale: number;
+  taskArrivalRate: number;
+  taskDifficulty: number;
+  collapseThreshold: number;
+  initialBacklog: number;
+  wGroup: number;
+  wIndividual: number;
+  wEfficiency: number;
+}
+
+async function createCoopConfig(
+  params: CoopConfigParams,
+): Promise<{ config_id: string }> {
   const body = {
     identity: {
       environment_type: "cooperative",
@@ -105,30 +131,30 @@ async function createCoopConfig(params: {
       num_agents: params.numAgents,
       max_steps: params.maxSteps,
       num_task_types: params.numTaskTypes,
-      agent_effort_capacity: 1.0,
-      collapse_sustain_window: 10,
-      enable_early_success: false,
-      clearance_sustain_window: 15,
+      agent_effort_capacity: params.agentEffortCapacity,
+      collapse_sustain_window: params.collapseSustainWindow,
+      enable_early_success: params.enableEarlySuccess,
+      clearance_sustain_window: params.clearanceSustainWindow,
     },
     layers: {
-      observation_noise: 0.0,
-      history_window: 5,
-      specialization_scale: 0.3,
-      specialization_decay: 0.1,
-      task_arrival_noise: 0.1,
-      task_difficulty_variance: 0.0,
-      free_rider_pressure_scale: 1.0,
+      observation_noise: params.observationNoise,
+      history_window: params.historyWindow,
+      specialization_scale: params.specializationScale,
+      specialization_decay: params.specializationDecay,
+      task_arrival_noise: params.taskArrivalNoise,
+      task_difficulty_variance: params.taskDifficultyVariance,
+      free_rider_pressure_scale: params.freeRiderPressureScale,
     },
     task: {
-      task_arrival_rate: 1.0,
-      task_difficulty: 1.0,
-      collapse_threshold: 50,
-      initial_backlog: 0,
+      task_arrival_rate: params.taskArrivalRate,
+      task_difficulty: params.taskDifficulty,
+      collapse_threshold: params.collapseThreshold,
+      initial_backlog: params.initialBacklog,
     },
     rewards: {
-      w_group: 0.7,
-      w_individual: 0.2,
-      w_efficiency: 0.1,
+      w_group: params.wGroup,
+      w_individual: params.wIndividual,
+      w_efficiency: params.wEfficiency,
     },
     instrumentation: {
       enable_step_metrics: true,
@@ -270,16 +296,47 @@ function RunHistoryPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Main page
+// Main page — Suspense wrapper required for useSearchParams
 // ---------------------------------------------------------------------------
 
 export default function CooperativePage() {
-  // Config form state
+  return (
+    <Suspense>
+      <CooperativePageInner />
+    </Suspense>
+  );
+}
+
+function CooperativePageInner() {
+  const searchParams = useSearchParams();
+  const advanced = searchParams.get("mode") === "advanced";
+
+  // Basic config form state
   const [numAgents, setNumAgents] = useState(4);
   const [maxSteps, setMaxSteps] = useState(200);
   const [seed, setSeed] = useState(42);
   const [numTaskTypes, setNumTaskTypes] = useState(3);
   const [agentPolicy, setAgentPolicy] = useState<CoopPolicy>("random");
+
+  // Advanced config state — defaults match createCoopConfig previous hardcoded values
+  const [agentEffortCapacity, setAgentEffortCapacity] = useState(1.0);
+  const [collapseSustainWindow, setCollapseSustainWindow] = useState(10);
+  const [enableEarlySuccess, setEnableEarlySuccess] = useState(false);
+  const [clearanceSustainWindow, setClearanceSustainWindow] = useState(15);
+  const [observationNoise, setObservationNoise] = useState(0.0);
+  const [historyWindow, setHistoryWindow] = useState(5);
+  const [specializationScale, setSpecializationScale] = useState(0.3);
+  const [specializationDecay, setSpecializationDecay] = useState(0.1);
+  const [taskArrivalNoise, setTaskArrivalNoise] = useState(0.1);
+  const [taskDifficultyVariance, setTaskDifficultyVariance] = useState(0.0);
+  const [freeRiderPressureScale, setFreeRiderPressureScale] = useState(1.0);
+  const [taskArrivalRate, setTaskArrivalRate] = useState(1.0);
+  const [taskDifficulty, setTaskDifficulty] = useState(1.0);
+  const [collapseThreshold, setCollapseThreshold] = useState(50);
+  const [initialBacklog, setInitialBacklog] = useState(0);
+  const [wGroup, setWGroup] = useState(0.7);
+  const [wIndividual, setWIndividual] = useState(0.2);
+  const [wEfficiency, setWEfficiency] = useState(0.1);
 
   // Run state
   const [runId, setRunId] = useState<string | null>(null);
@@ -325,6 +382,24 @@ export default function CooperativePage() {
         maxSteps,
         seed,
         numTaskTypes,
+        agentEffortCapacity,
+        collapseSustainWindow,
+        enableEarlySuccess,
+        clearanceSustainWindow,
+        observationNoise,
+        historyWindow,
+        specializationScale,
+        specializationDecay,
+        taskArrivalNoise,
+        taskDifficultyVariance,
+        freeRiderPressureScale,
+        taskArrivalRate,
+        taskDifficulty,
+        collapseThreshold,
+        initialBacklog,
+        wGroup,
+        wIndividual,
+        wEfficiency,
       });
       const { run_id } = await startCoopRun(config_id, agentPolicy);
       setRunId(run_id);
@@ -406,9 +481,9 @@ export default function CooperativePage() {
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 24 }}>
+      <div style={{ display: "flex", gap: 24 }}>
         {/* ── Config panel ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1, minWidth: 0 }}>
           <div style={{ ...panelStyle, borderTop: "2px solid var(--accent)" }}>
             <div
               style={{
@@ -424,8 +499,9 @@ export default function CooperativePage() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* ── Basic parameters ── */}
               <div>
-                <label style={labelStyle}>Agents</label>
+                <label style={labelStyle}>num_agents</label>
                 <input
                   type="number"
                   min={2}
@@ -436,7 +512,7 @@ export default function CooperativePage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Max Steps</label>
+                <label style={labelStyle}>max_steps</label>
                 <input
                   type="number"
                   min={10}
@@ -447,7 +523,7 @@ export default function CooperativePage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Task Types</label>
+                <label style={labelStyle}>num_task_types</label>
                 <input
                   type="number"
                   min={1}
@@ -458,7 +534,7 @@ export default function CooperativePage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Seed</label>
+                <label style={labelStyle}>seed</label>
                 <input
                   type="number"
                   value={seed}
@@ -467,7 +543,7 @@ export default function CooperativePage() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Agent Policy</label>
+                <label style={labelStyle}>agent_policy</label>
                 <select
                   value={agentPolicy}
                   onChange={(e) =>
@@ -482,6 +558,278 @@ export default function CooperativePage() {
                   ))}
                 </select>
               </div>
+
+              {/* ── Advanced parameters ── */}
+              {advanced && (
+                <>
+                  <hr
+                    style={{
+                      border: "none",
+                      borderTop: "1px solid var(--bg-border)",
+                      margin: "4px 0",
+                    }}
+                  />
+                  <p
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase" as const,
+                      letterSpacing: "0.05em",
+                      color: "var(--text-tertiary)",
+                      marginBottom: 0,
+                    }}
+                  >
+                    Advanced parameters
+                  </p>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "12px 16px",
+                    }}
+                  >
+                    {/* Population */}
+                    <div>
+                      <label style={labelStyle}>agent_effort_capacity</label>
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={0.1}
+                        value={agentEffortCapacity}
+                        onChange={(e) =>
+                          setAgentEffortCapacity(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>collapse_sustain_window</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={collapseSustainWindow}
+                        onChange={(e) =>
+                          setCollapseSustainWindow(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={labelStyle}>enable_early_success</label>
+                      <select
+                        value={enableEarlySuccess ? "true" : "false"}
+                        onChange={(e) =>
+                          setEnableEarlySuccess(e.target.value === "true")
+                        }
+                        style={selectStyle}
+                      >
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>clearance_sustain_window</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={clearanceSustainWindow}
+                        onChange={(e) =>
+                          setClearanceSustainWindow(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    {/* Layers */}
+                    <div>
+                      <label style={labelStyle}>observation_noise</label>
+                      <input
+                        type="number"
+                        step={0.01}
+                        min={0}
+                        max={0.2}
+                        value={observationNoise}
+                        onChange={(e) =>
+                          setObservationNoise(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>history_window</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={historyWindow}
+                        onChange={(e) =>
+                          setHistoryWindow(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>specialization_scale</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0}
+                        max={0.5}
+                        value={specializationScale}
+                        onChange={(e) =>
+                          setSpecializationScale(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>specialization_decay</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0.01}
+                        max={0.99}
+                        value={specializationDecay}
+                        onChange={(e) =>
+                          setSpecializationDecay(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>task_arrival_noise</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0}
+                        max={0.3}
+                        value={taskArrivalNoise}
+                        onChange={(e) =>
+                          setTaskArrivalNoise(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>task_difficulty_variance</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0}
+                        max={0.3}
+                        value={taskDifficultyVariance}
+                        onChange={(e) =>
+                          setTaskDifficultyVariance(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>free_rider_pressure_scale</label>
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={0}
+                        max={1}
+                        value={freeRiderPressureScale}
+                        onChange={(e) =>
+                          setFreeRiderPressureScale(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    {/* Task */}
+                    <div>
+                      <label style={labelStyle}>task_arrival_rate</label>
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={0.1}
+                        value={taskArrivalRate}
+                        onChange={(e) =>
+                          setTaskArrivalRate(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>task_difficulty</label>
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={0.1}
+                        value={taskDifficulty}
+                        onChange={(e) =>
+                          setTaskDifficulty(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>collapse_threshold</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={collapseThreshold}
+                        onChange={(e) =>
+                          setCollapseThreshold(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>initial_backlog</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={initialBacklog}
+                        onChange={(e) =>
+                          setInitialBacklog(Number(e.target.value))
+                        }
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    {/* Rewards */}
+                    <div>
+                      <label style={labelStyle}>w_group</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0.5}
+                        max={0.95}
+                        value={wGroup}
+                        onChange={(e) => setWGroup(Number(e.target.value))}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>w_individual</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0.01}
+                        max={0.49}
+                        value={wIndividual}
+                        onChange={(e) => setWIndividual(Number(e.target.value))}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>w_efficiency</label>
+                      <input
+                        type="number"
+                        step={0.05}
+                        min={0.01}
+                        max={0.49}
+                        value={wEfficiency}
+                        onChange={(e) => setWEfficiency(Number(e.target.value))}
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <button
                 onClick={handleStart}
@@ -511,7 +859,7 @@ export default function CooperativePage() {
         </div>
 
         {/* ── Right panel ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20, flex: 1, minWidth: 0 }}>
           {/* Live chart */}
           {(running || stepHistory.length > 0) && (
             <div style={panelStyle}>
