@@ -986,6 +986,237 @@ export function streamCooperativeReplay(
 }
 
 // ---------------------------------------------------------------------------
+// Cooperative League
+// ---------------------------------------------------------------------------
+
+export interface CooperativeLeagueMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  rating: number;
+  [key: string]: unknown;
+}
+
+export interface CooperativeLeagueRating {
+  member_id: string;
+  rating: number;
+}
+
+export interface CooperativeLineageMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  rating: number;
+  label?: string;
+}
+
+export interface CooperativeLineageResponse {
+  members: CooperativeLineageMember[];
+}
+
+export interface CooperativeChampionInfo {
+  member_id: string | null;
+  rating?: number;
+  parent_id?: string | null;
+  created_at?: string | null;
+  notes?: string | null;
+}
+
+export interface CooperativeEvolutionMember {
+  member_id: string;
+  parent_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  rating: number;
+  strategy: {
+    cluster_id: number | null;
+    label: string;
+    features: Record<string, unknown>;
+  };
+  robustness_score: number | null;
+}
+
+export interface CooperativeChampionHistoryEntry {
+  member_id: string;
+  created_at: string | null;
+  rating: number;
+  label: string;
+  cluster_id: number | null;
+  robustness_score: number | null;
+}
+
+export interface CooperativeEvolutionResponse {
+  members: CooperativeEvolutionMember[];
+  champion_history: CooperativeChampionHistoryEntry[];
+}
+
+export interface CooperativeRobustnessRequest {
+  config_id?: string;
+  seeds?: number;
+  episodes_per_seed?: number;
+  limit_sweeps?: number | null;
+  seed?: number;
+}
+
+export interface CooperativeRobustnessResponse {
+  robustness_id: string;
+}
+
+export interface CooperativeRobustnessStatusResponse {
+  robustness_id: string;
+  running: boolean;
+  stage: string;
+  error?: string;
+  report_id?: string;
+}
+
+export function getCooperativeLeagueMembers(): Promise<CooperativeLeagueMember[]> {
+  return json(`${BASE}/cooperative/league/members`);
+}
+
+export function getCooperativeLeagueMember(
+  memberId: string,
+): Promise<CooperativeLeagueMember> {
+  return json(`${BASE}/cooperative/league/members/${encodeURIComponent(memberId)}`);
+}
+
+export function getCooperativeChampion(): Promise<CooperativeChampionInfo> {
+  return json(`${BASE}/cooperative/league/champion`);
+}
+
+export function getCooperativeLeagueLineage(): Promise<CooperativeLineageResponse> {
+  return json(`${BASE}/cooperative/league/lineage`);
+}
+
+export function getCooperativeLeagueEvolution(): Promise<CooperativeEvolutionResponse> {
+  return json(`${BASE}/cooperative/league/evolution`);
+}
+
+export function runCooperativeChampionRobustness(
+  payload: CooperativeRobustnessRequest,
+): Promise<CooperativeRobustnessResponse> {
+  return json(`${BASE}/cooperative/league/champion/robustness`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getCooperativeRobustnessStatus(
+  robustnessId: string,
+): Promise<CooperativeRobustnessStatusResponse> {
+  return json(
+    `${BASE}/cooperative/league/champion/robustness/${encodeURIComponent(robustnessId)}/status`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Cooperative Pipeline
+// ---------------------------------------------------------------------------
+
+export interface CooperativePipelineRunParams {
+  config_id?: string;
+  seed?: number;
+  seeds?: number;
+  episodes_per_seed?: number;
+  max_steps?: number | null;
+  total_timesteps?: number;
+  snapshot_every_timesteps?: number;
+  max_league_members?: number;
+  num_matches?: number;
+  limit_sweeps?: number | null;
+}
+
+export interface CooperativePipelineStatusResponse {
+  pipeline_id: string;
+  running: boolean;
+  stage: string;
+  error?: string;
+  report_id?: string;
+  summary_path?: string;
+}
+
+export function startCooperativePipeline(
+  params: CooperativePipelineRunParams,
+): Promise<{ pipeline_id: string }> {
+  return json(`${BASE}/cooperative/pipeline/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
+export function getCooperativePipelineStatus(
+  pipelineId: string,
+): Promise<CooperativePipelineStatusResponse> {
+  return json(
+    `${BASE}/cooperative/pipeline/status/${encodeURIComponent(pipelineId)}`,
+  );
+}
+
+export function listCooperativePipelineRuns(): Promise<
+  Array<{
+    pipeline_id: string;
+    timestamp: string;
+    config_id: string;
+    config_hash: string;
+    report_id: string | null;
+    archetype: string;
+  }>
+> {
+  return json(`${BASE}/cooperative/pipeline/runs`);
+}
+
+// ---------------------------------------------------------------------------
+// Cooperative Reports
+// ---------------------------------------------------------------------------
+
+export interface CooperativeReportListItem {
+  report_id: string;
+  kind: string;
+  config_hash: string;
+  timestamp: string;
+  path_name: string;
+  mean_completion_ratio?: number | null;
+  robustness_score?: number | null;
+}
+
+export interface CooperativeRobustnessHeatmapResponse {
+  sweep_names: string[];
+  policies: string[];
+  heatmap: Record<string, Record<string, number | null>>;
+  per_policy_robustness: Record<string, unknown>;
+}
+
+export function getCooperativeReports(): Promise<CooperativeReportListItem[]> {
+  return json(`${BASE}/cooperative/reports`);
+}
+
+export function getCooperativeReport(
+  reportId: string,
+): Promise<Record<string, unknown>> {
+  return json(`${BASE}/cooperative/reports/${encodeURIComponent(reportId)}`);
+}
+
+export function getCooperativeReportRobustness(
+  reportId: string,
+): Promise<CooperativeRobustnessHeatmapResponse> {
+  return json(
+    `${BASE}/cooperative/reports/${encodeURIComponent(reportId)}/robustness`,
+  );
+}
+
+export function getCooperativeReportStrategies(
+  reportId: string,
+): Promise<StrategyResponse> {
+  return json(
+    `${BASE}/cooperative/reports/${encodeURIComponent(reportId)}/strategies`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 

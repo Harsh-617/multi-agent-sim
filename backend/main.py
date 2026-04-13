@@ -8,6 +8,9 @@ from fastapi import FastAPI
 
 from backend.api.routes_config import router as config_router
 from backend.api.routes_cooperative import router as cooperative_router
+from backend.api.routes_cooperative_league import router as cooperative_league_router
+from backend.api.routes_cooperative_pipeline import router as cooperative_pipeline_router
+from backend.api.routes_cooperative_reports import router as cooperative_reports_router
 from backend.api.routes_experiment import router as experiment_router
 from backend.api.routes_history import router as history_router
 from backend.api.routes_competitive_league import router as competitive_league_router
@@ -28,6 +31,8 @@ _STORAGE_DIRS = [
     STORAGE_ROOT / "agents",
     STORAGE_ROOT / "agents" / "league",
     STORAGE_ROOT / "agents" / "competitive_league",
+    STORAGE_ROOT / "agents" / "cooperative",
+    STORAGE_ROOT / "agents" / "cooperative" / "league",
 ]
 
 
@@ -42,6 +47,9 @@ app = FastAPI(title="Multi-Agent Simulation", version="0.1.0", lifespan=lifespan
 
 app.include_router(competitive_league_router)
 app.include_router(cooperative_router)
+app.include_router(cooperative_league_router)
+app.include_router(cooperative_pipeline_router)
+app.include_router(cooperative_reports_router)
 app.include_router(competitive_reports_router)
 app.include_router(config_router)
 app.include_router(experiment_router)

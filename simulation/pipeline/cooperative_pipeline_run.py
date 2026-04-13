@@ -1,17 +1,24 @@
-"""End-to-end pipeline orchestrator.
+"""End-to-end cooperative pipeline orchestrator.
 
 Stages (in order):
-  1. loading_config   – load / validate MixedEnvironmentConfig
-  2. training         – league PPO with periodic snapshots
+  1. loading_config   – load / validate CooperativeEnvironmentConfig
+  2. training         – cooperative league PPO with periodic snapshots
   3. ratings          – recompute Elo ratings and persist ratings.json
-  4. robustness       – evaluate policy set across environment sweeps
-  5. saving           – write storage/pipelines/<id>/summary.json
-  6. done             – pipeline completed
+  4. evaluating       – cross-seed evaluation
+  5. robustness       – 20-variant robustness sweep
+  6. saving           – write storage/pipelines/cooperative_<ts>_<hash>/summary.json
+  7. done             – pipeline completed
+
+Storage paths:
+  storage/agents/cooperative/league/
+  storage/reports/cooperative_eval_{hash}_{ts}/
+  storage/reports/cooperative_robust_{hash}_{ts}/
+  storage/pipelines/cooperative_pipeline_{ts}_{hash}/
 
 Usage::
 
-    from simulation.pipeline.pipeline_run import run_pipeline
-    summary_dir = run_pipeline("default", seed=42, total_timesteps=50_000)
+    from simulation.pipeline.cooperative_pipeline_run import run_cooperative_pipeline
+    summary_dir = run_cooperative_pipeline(seed=42, total_timesteps=50_000)
 """
 
 from __future__ import annotations
@@ -22,24 +29,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from simulation.config.cooperative_defaults import default_cooperative_config
 from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
-from simulation.config.defaults import default_config
-from simulation.config.schema import MixedEnvironmentConfig
-from simulation.pipeline.cooperative_pipeline_run import run_cooperative_pipeline  # noqa: F401
-from simulation.evaluation.reporting import write_robustness_report
-from simulation.evaluation.policy_set import resolve_policy_set
-from simulation.evaluation.robustness import evaluate_robustness
-from simulation.evaluation.sweeps import build_default_sweeps
-from simulation.league.ratings import compute_ratings, save_ratings
-from simulation.league.registry import LeagueRegistry
-from simulation.training.ppo_shared import PPOConfig, train
+from simulation.evaluation.cooperative_eval_runner import run_cooperative_eval
+from simulation.evaluation.cooperative_robustness import run_cooperative_robustness
+from simulation.evaluation.cooperative_sweeps import build_cooperative_sweeps
+from simulation.league.cooperative_ratings import (
+    compute_cooperative_ratings,
+    save_cooperative_ratings,
+)
+from simulation.league.cooperative_registry import CooperativeLeagueRegistry
+from simulation.training.cooperative_league_train import train_cooperative_league
+from simulation.training.ppo_shared import PPOConfig
 
 # ---------------------------------------------------------------------------
 # Default storage locations
 # ---------------------------------------------------------------------------
 
-_AGENTS_DIR = Path("storage/agents")
-_PPO_AGENT_DIR = _AGENTS_DIR / "ppo_shared"
+_AGENTS_DIR = Path("storage/agents/cooperative")
+_COOPERATIVE_PPO_DIR = _AGENTS_DIR / "ppo_shared"
 _PIPELINES_DIR = Path("storage/pipelines")
 _CONFIGS_DIR = Path("storage/configs")
 _REPORTS_DIR = Path("storage/reports")
@@ -55,10 +63,7 @@ def _find_champion(
     members: list[dict],
     ratings: dict[str, float],
 ) -> dict | None:
-    """Return the member with the highest Elo rating.
-
-    Tie-breaker: newest ``created_at`` string wins (ISO-8601 lexicographic).
-    """
+    """Return the member with the highest Elo rating."""
     if not members:
         return None
     best: dict | None = None
@@ -75,20 +80,20 @@ def _find_champion(
 
 
 # ---------------------------------------------------------------------------
-# Pipeline summary helper
+# Pipeline ID helper
 # ---------------------------------------------------------------------------
 
 def _pipeline_id(config_id: str, seed: int) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     h = hashlib.sha256(f"{config_id}:{seed}".encode()).hexdigest()[:8]
-    return f"pipeline_{ts}_{h}"
+    return f"cooperative_pipeline_{ts}_{h}"
 
 
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run_pipeline(
+def run_cooperative_pipeline(
     config_id: str = "default",
     *,
     seed: int = 42,
@@ -102,12 +107,12 @@ def run_pipeline(
     limit_sweeps: int | None = None,
     progress_callback: Callable[[str, str], None] | None = None,
     # Overridable for test isolation
-    ppo_agent_dir: Path = _PPO_AGENT_DIR,
+    ppo_agent_dir: Path = _COOPERATIVE_PPO_DIR,
     pipelines_dir: Path = _PIPELINES_DIR,
     configs_dir: Path = _CONFIGS_DIR,
     reports_dir: Path = _REPORTS_DIR,
 ) -> Path:
-    """Run the full automation pipeline and return the summary directory.
+    """Run the full cooperative automation pipeline.
 
     Parameters
     ----------
@@ -116,15 +121,15 @@ def run_pipeline(
     seed:
         Master seed for training and evaluation determinism.
     seeds:
-        Number of evaluation seeds (``base_seed``, ``base_seed+1``, …).
+        Number of cross-seed evaluation seeds.
     episodes_per_seed:
-        Episodes per seed per policy per robustness sweep.
+        Episodes per seed per robustness sweep.
     max_steps:
-        Optional environment ``max_steps`` override for faster evaluation.
+        Optional environment max_steps override for faster evaluation.
     total_timesteps:
-        Total environment steps for league PPO training.
+        Total PPO training steps.
     snapshot_every_timesteps:
-        How often to snapshot the current policy into the league.
+        League snapshot interval.
     max_league_members:
         Maximum league members to retain (oldest dropped first).
     num_matches:
@@ -132,16 +137,15 @@ def run_pipeline(
     limit_sweeps:
         Cap the number of robustness sweeps for faster runs.
     progress_callback:
-        Optional ``callback(stage, detail)`` called at each pipeline stage.
+        Optional ``callback(stage, detail)`` called at each stage.
     ppo_agent_dir:
-        Destination for PPO artifacts (``policy.pt`` + ``metadata.json``).
-        League snapshots land in ``ppo_agent_dir.parent / "league"``.
+        Destination for PPO artifacts.
     pipelines_dir:
         Root directory for pipeline summary artifacts.
     configs_dir:
         Directory containing saved ``{config_id}.json`` files.
     reports_dir:
-        Root directory for robustness evaluation reports.
+        Root directory for evaluation reports.
 
     Returns
     -------
@@ -153,8 +157,8 @@ def run_pipeline(
         if progress_callback is not None:
             progress_callback(stage, detail)
 
-    # Derived paths (consistent whether real or test-isolated)
-    agents_dir = ppo_agent_dir.parent
+    # Derived paths
+    agents_dir = ppo_agent_dir.parent  # storage/agents/cooperative
     league_root = agents_dir / "league"
     ratings_path = league_root / "ratings.json"
 
@@ -164,20 +168,18 @@ def run_pipeline(
     _notify("loading_config", config_id)
 
     if config_id == "default":
-        config = default_config(seed=seed)
+        config = default_cooperative_config(seed=seed)
         config_dict: dict[str, Any] = json.loads(config.model_dump_json())
     else:
         config_path = configs_dir / f"{config_id}.json"
         raw = config_path.read_text(encoding="utf-8")
         config_dict = json.loads(raw)
-        env_type = config_dict.get("identity", {}).get("environment_type", "mixed")
-        if env_type == "cooperative":
-            config = CooperativeEnvironmentConfig.model_validate(config_dict)
-        else:
-            config = MixedEnvironmentConfig.model_validate_json(raw)
+        config = CooperativeEnvironmentConfig.model_validate(config_dict)
 
-    base_seed = config.identity.seed
-    eval_seeds = [base_seed + i for i in range(seeds)]
+    if max_steps is not None:
+        config.population.max_steps = max_steps
+
+    eval_seeds = [seed + i for i in range(seeds)]
 
     # ------------------------------------------------------------------
     # Stage 2: League PPO training with snapshotting
@@ -193,69 +195,79 @@ def run_pipeline(
         save_dir=str(agents_dir),
         agent_id="ppo_shared",
     )
-    train(config, ppo_cfg)
+    train_cooperative_league(config, ppo_cfg, league_root=league_root)
 
     # ------------------------------------------------------------------
     # Stage 3: Recompute Elo ratings
     # ------------------------------------------------------------------
     _notify("ratings", "computing Elo ratings")
 
-    registry = LeagueRegistry(league_root=str(league_root))
-    ratings: dict[str, float] = compute_ratings(
+    registry = CooperativeLeagueRegistry(league_root=str(league_root))
+    ratings: dict[str, float] = compute_cooperative_ratings(
         registry,
         num_matches=num_matches,
         seed=seed,
     )
-    save_ratings(ratings_path, ratings)
+    save_cooperative_ratings(ratings_path, ratings)
 
     members = registry.list_members()
-    ratings_map = {r["member_id"]: r for r in registry.list_members()}
     champion = _find_champion(members, ratings)
     champion_id = champion["member_id"] if champion else None
     champion_rating = ratings.get(champion_id, _DEFAULT_RATING) if champion_id else None
 
     # ------------------------------------------------------------------
-    # Stage 4: Robustness evaluation
+    # Stage 4: Cross-seed evaluation
     # ------------------------------------------------------------------
-    _notify("robustness", "building policy set")
+    _notify("evaluating", f"cross-seed eval over {seeds} seed(s)")
 
-    policy_specs = resolve_policy_set(
-        league_root=league_root,
-        ratings_path=ratings_path,
-        ppo_dir=ppo_agent_dir,
-        top_k=2,
-    )
+    eval_report_dir: Path | None = None
+    if ppo_agent_dir.exists():
+        eval_report_dir = run_cooperative_eval(
+            config,
+            agent_dir=ppo_agent_dir,
+            num_seeds=seeds,
+            episodes_per_seed=episodes_per_seed,
+            base_seed=seed + 1000,
+            report_root=reports_dir,
+            policy_name="cooperative_ppo",
+        )
 
-    sweeps = build_default_sweeps()
+    # ------------------------------------------------------------------
+    # Stage 5: Robustness sweep
+    # ------------------------------------------------------------------
+    _notify("robustness", "building sweep variants")
+
+    sweeps = build_cooperative_sweeps()
     if limit_sweeps is not None:
         sweeps = sweeps[:limit_sweeps]
 
     _notify("robustness", f"running {len(sweeps)} sweeps")
 
-    robustness_result = evaluate_robustness(
-        config,
-        policy_specs,
-        sweeps,
-        seeds=eval_seeds,
-        episodes_per_seed=episodes_per_seed,
-        max_steps_override=max_steps,
-    )
+    robust_report_dir: Path | None = None
+    champion_dir = registry.load_member(champion_id) if champion_id else None
+    if champion_dir is None and ppo_agent_dir.exists():
+        champion_dir = ppo_agent_dir
 
-    # ------------------------------------------------------------------
-    # Stage 5: Write robustness report
-    # ------------------------------------------------------------------
-    _notify("saving", "writing robustness report")
+    if champion_dir is not None and (champion_dir / "policy.pt").exists():
+        robust_report_dir = run_cooperative_robustness(
+            config,
+            agent_dir=champion_dir,
+            sweeps=sweeps,
+            seeds=eval_seeds,
+            episodes_per_seed=episodes_per_seed,
+            policy_name="cooperative_champion",
+            report_root=reports_dir,
+        )
 
-    report_dir = write_robustness_report(
-        robustness_result,
-        config_dict=config_dict,
-        report_root=reports_dir,
+    report_id = robust_report_dir.name if robust_report_dir else (
+        eval_report_dir.name if eval_report_dir else None
     )
-    report_id = report_dir.name
 
     # ------------------------------------------------------------------
     # Stage 6: Write pipeline summary
     # ------------------------------------------------------------------
+    _notify("saving", "writing pipeline summary")
+
     pid = _pipeline_id(config_id, seed)
     out_dir = pipelines_dir / pid
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -268,6 +280,7 @@ def run_pipeline(
             json.dumps(config_dict, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()[:12],
         "seed": seed,
+        "archetype": "cooperative",
         "training": {
             "total_timesteps": total_timesteps,
             "ppo_agent_dir": str(ppo_agent_dir),
@@ -280,13 +293,15 @@ def run_pipeline(
             "num_members_rated": len(ratings),
             "num_matches": num_matches,
         },
-        "robustness": {
-            "report_id": report_id,
-            "report_dir": str(report_dir),
-            "n_sweeps": len(sweeps),
-            "n_policies": len(policy_specs),
+        "evaluating": {
+            "seeds": eval_seeds,
+            "episodes_per_seed": episodes_per_seed,
+            "eval_report_id": eval_report_dir.name if eval_report_dir else None,
         },
-        # Top-level shortcuts for easy consumption
+        "robustness": {
+            "report_id": robust_report_dir.name if robust_report_dir else None,
+            "n_sweeps": len(sweeps),
+        },
         "report_id": report_id,
         "summary_path": str(out_dir / "summary.json"),
     }
