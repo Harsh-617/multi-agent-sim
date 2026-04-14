@@ -115,9 +115,45 @@ export default function CooperativeRunSummary({ summary }: Props) {
 
       {/* ── Outcome metrics ── */}
       <div style={panelStyle}>
-        <div style={sectionTitle}>Outcome</div>
+        <div style={{ ...sectionTitle, display: "flex", alignItems: "center", gap: 8 }}>
+          <span>Outcome</span>
+          {summary.termination_reason === "system_collapse" && (
+            <span
+              style={{
+                fontSize: 11,
+                color: "#ef4444",
+                fontWeight: 400,
+                textTransform: "none",
+                letterSpacing: 0,
+              }}
+            >
+              Group failed to keep up with task demand
+            </span>
+          )}
+          {summary.termination_reason === "perfect_clearance" && (
+            <span
+              style={{
+                fontSize: 11,
+                color: "#22c55e",
+                fontWeight: 400,
+                textTransform: "none",
+                letterSpacing: 0,
+              }}
+            >
+              Group cleared the entire backlog
+            </span>
+          )}
+        </div>
         <dl style={dlStyle}>
-          <MetricRow label="Completion ratio" value={pct(summary.completion_ratio)} />
+          <MetricRow
+            label="Completion ratio"
+            value={
+              summary.termination_reason === "system_collapse" &&
+              summary.completion_ratio === 1.0
+                ? "N/A"
+                : pct(summary.completion_ratio)
+            }
+          />
           <MetricRow label="Group efficiency" value={pct(summary.group_efficiency_ratio)} />
           <MetricRow label="Mean system stress" value={num(summary.mean_system_stress)} />
           <MetricRow label="Peak system stress" value={num(summary.peak_system_stress)} />
