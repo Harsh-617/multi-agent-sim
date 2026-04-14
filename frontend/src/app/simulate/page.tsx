@@ -390,7 +390,7 @@ export default function SimulatePage() {
               href="/simulate/head-to-head"
             />
             <HeroCard
-              title="Cooperative Task Simulation"
+              title="Cooperative Task Arena"
               subtitle="Agents share a task queue and coordinate effort to prevent system collapse. Emergent specialization and free-rider dynamics unfold over time."
               tags={["Coordination", "Specialization", "Collective Goal"]}
               accentColor="#8b5cf6"

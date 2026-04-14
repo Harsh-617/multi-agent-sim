@@ -468,7 +468,7 @@ function CooperativePageInner() {
             margin: 0,
           }}
         >
-          Cooperative Task Simulation
+          Cooperative Task Arena
         </h1>
         <p
           style={{
