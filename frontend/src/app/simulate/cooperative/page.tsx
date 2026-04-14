@@ -14,7 +14,7 @@
  */
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 
 import {
@@ -308,6 +308,7 @@ export default function CooperativePage() {
 }
 
 function CooperativePageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const advanced = searchParams.get("mode") === "advanced";
 
@@ -403,6 +404,8 @@ function CooperativePageInner() {
       });
       const { run_id } = await startCoopRun(config_id, agentPolicy);
       setRunId(run_id);
+      router.push(`/simulate/cooperative/run/${run_id}`);
+      return;
 
       // Connect WebSocket
       const ws = connectMetrics(
