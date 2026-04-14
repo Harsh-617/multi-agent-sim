@@ -179,7 +179,11 @@ function ReportCard({ report }: { report: ReportEntry }) {
 
       {/* Open button */}
       <Link
-        href={`/research/${encodeURIComponent(report.report_id)}`}
+        href={
+          report.archetype === "Cooperative"
+            ? `/research/cooperative/${encodeURIComponent(report.report_id)}`
+            : `/research/${encodeURIComponent(report.report_id)}`
+        }
         style={{ textDecoration: "none", marginTop: 16 }}
       >
         <button
