@@ -623,3 +623,71 @@ Minor (3):
 Build: npm run build passes with zero errors
 TypeScript: npx tsc --noEmit passes with zero errors
 Tests: 266 passed, 0 failed
+
+
+## Cooperative Archetype
+
+### Phase 1: Paper Spec
+- Designed all 11 parts following the same methodology as Mixed and Competitive
+- Documented in `design/Cooperative_archetype.md`
+- Sanity check completed — 7 ambiguities found and resolved:
+  1. `effort_capacity` removed from agent-local state — treated as fixed config param `agent_effort_capacity`
+  2. `contribution_share` always equals 1.0 when one task type chosen per step — EMA simplified
+  3. `task_difficulty` scalar vs per-type — formula updated to use `task_difficulty[type]`
+  4. Division by zero in completion rate — guard added: `tasks_arrived==0 → rate=1.0`
+  5. `system_stress` float equality fragile — changed to `backlog_level >= collapse_threshold`
+  6. `group_efficiency_ratio` undefined — formula defined explicitly
+  7. `dominant_task_type` categorical — removed from clustering feature vector, kept as metadata
+
+### Phase 2: Architecture Design (Step B)
+- New files: `simulation/envs/cooperative/`, `simulation/adapters/cooperative_pettingzoo.py`, `simulation/config/cooperative_schema.py`, `simulation/config/cooperative_defaults.py`, `simulation/agents/cooperative_baselines.py`, `simulation/metrics/cooperative_definitions.py`, `simulation/metrics/cooperative_collector.py`, `simulation/runner/cooperative_experiment_runner.py`, `simulation/training/cooperative_train.py`, `simulation/training/cooperative_eval.py`, `simulation/training/cooperative_league_train.py`, `simulation/league/cooperative_registry.py`, `simulation/league/cooperative_ratings.py`, `simulation/evaluation/cooperative_eval_runner.py`, `simulation/evaluation/cooperative_robustness.py`, `simulation/evaluation/cooperative_sweeps.py`, `simulation/analysis/cooperative_clustering.py`, `backend/api/routes_cooperative.py`, `backend/api/routes_cooperative_league.py`, `backend/api/routes_cooperative_pipeline.py`, `backend/api/routes_cooperative_reports.py`
+- Existing files modified (minimal targeted changes only): `routes_config.py`, `routes_experiment.py`, `pipeline_run.py`, `simulation/core/types.py` (added `PERFECT_CLEARANCE`), `backend/main.py` (registered cooperative routers), `backend/schemas/api_models.py` (added 5 cooperative policies)
+- Storage path: `storage/agents/cooperative/`
+
+### Phase 3: Implementation
+
+#### Step C: Minimal Vertical Slice
+- Environment core loop, all 6 baseline agents, PettingZoo adapter, config schema, metrics collector, experiment runner
+- 32 new tests — total: 311 passing
+
+#### Step D: MARL Integration
+- `cooperative_train.py`, `cooperative_eval.py` — wired to existing PPO training loop
+- Adapter verified compatible with `SharedPolicyNetwork`
+- 13 new tests — total: 311 passing
+
+#### Step E: Instrumentation & Visualization
+- `CooperativeMetricsChart`, `CooperativeRunSummary`, `CooperativeReplayView`, `SpecializationChart`, `ContributionVarianceChart`
+- `/simulate/cooperative` page, `/simulate/cooperative/replay/[run_id]` page
+- 4 backend endpoints: runs, replay, summary, detail
+- 33 new tests — total: 344 passing
+
+#### Step F: Agent Export & Reuse
+- League system: `cooperative_registry.py`, `cooperative_ratings.py`, `cooperative_league_train.py`
+- Evaluation: `cooperative_eval_runner.py`, `cooperative_robustness.py`, `cooperative_sweeps.py` (20 variants)
+- Analysis: `cooperative_clustering.py` (6-feature vector, 5 expected strategy labels)
+- Pipeline: cooperative routing added to `pipeline_run.py`
+- Backend: `routes_cooperative_league.py`, `routes_cooperative_pipeline.py`, `routes_cooperative_reports.py`
+- Frontend: league cooperative tab, research cooperative filter, `/research/cooperative/[report_id]` detail page, `CooperativeLeagueLineage`, `CooperativeChampionBenchmark`, `CooperativeChampionRobustness`, `CooperativeRobustScatter`, `CooperativeStrategyGroups`
+- 156 new tests — total: 500 passing
+
+### Phase 4: UI Fixes & Wiring
+- Cooperative not visible in UI — simulate index card, league tab switcher, research filter all wired
+- Agent policies missing from backend validator — 5 cooperative policies added to `api_models.py`
+- `specialist` and `balancer` missing from frontend dropdown — added to `COOP_POLICIES` array
+- Back link missing on cooperative simulate page — added matching RS pattern
+- Advanced mode missing all advanced parameters — 18 advanced fields added with 2-column grid
+- Panel layout unequal in advanced mode — fixed to `flex 1fr/1fr` matching RS
+- League tab showing Head-to-Head content — guard changed from `!isRS` to `archetype === "head-to-head"`
+- Cooperative pipeline trigger missing from league tab — added `PipelinePanel` with correct handler
+- Champion tab missing benchmark section and robustness config selector — added with full form
+- Champion benchmark 500 error — config dropdown was showing Mixed/Competitive configs, now filtered to cooperative only
+- Recompute Ratings button missing from cooperative ratings tab — added
+- Recompute ratings blocking all API requests — moved to FastAPI `BackgroundTask`, capped at 10 members and 3 matches
+- Report routing 404 — `/research/cooperative/[report_id]` page created, Open button branches on archetype
+- View report link after robustness sweep pointing to wrong path — fixed in `league/page.tsx`
+- Heatmap column labels overlapping cells — changed to vertical `writingMode` matching `RobustHeatmap.tsx`
+- Charts too small — `CHART_H` increased from 130 to 200
+- Completion ratio showing 100% on `system_collapse` — shows N/A, outcome notes added
+- Template name changed from "Cooperative Task Simulation" to "Cooperative Task Arena"
+- Home page updated — 3 environments, Cooperative research question card, CTA link added
+- About page updated — 3 archetypes, 500 tests, 16 strategy labels, cooperative user guide section, cooperative environment card

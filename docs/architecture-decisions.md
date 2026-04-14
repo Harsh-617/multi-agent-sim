@@ -284,3 +284,76 @@ pipeline_run.py           — add archetype routing
 - Never change the storage layout conventions
 - Never change the PPO training loop structure — adapt config and adapter only
 - Never let an adapter modify reward semantics or inject hidden state
+
+---
+
+## Section 5: Cooperative Archetype Decisions
+
+Decisions made explicitly during Step B architecture design before implementation began.
+
+---
+
+### ADR-014: Cooperative archetype uses task queue model not shared resource pool
+
+**Context:** The cooperative environment needed a mechanic clearly distinct from Mixed's shared pool.
+
+**Decision:** Task queue with configurable arrival rate, completion via pooled effort, and specialization EMA.
+
+**Reasoning:**
+- Clearly distinct from Mixed, maps to real distributed systems problems, enables specialization emergence without hardcoding it.
+
+**Consequences:**
+- Cooperative metrics (`completion_ratio`, `backlog_level`, `specialization_score`) are entirely distinct from Mixed and Competitive. A separate metrics collector is required.
+
+---
+
+### ADR-015: No individual agent termination in Cooperative V1
+
+**Context:** Mixed and Competitive both support individual agent elimination mid-episode.
+
+**Decision:** All agents remain active for the full episode in Cooperative V1.
+
+**Reasoning:**
+- Eliminating one agent mid-episode punishes the entire group for one agent's failure — a distinct mechanic that would obscure core coordination dynamics before they are validated. Individual penalties exist in the reward model instead.
+
+**Consequences:**
+- Episode termination is group-level only: `max_steps`, `system_collapse`, `perfect_clearance`. Individual elimination deferred to V2.
+
+---
+
+### ADR-016: Cooperative Elo recompute runs as background task capped at 10 members
+
+**Context:** `compute_cooperative_ratings` with 30 members blocked the entire FastAPI event loop for minutes because each rating match runs a full cooperative episode.
+
+**Decision:** Recompute runs via FastAPI `BackgroundTasks`, returning immediately. Capped at 10 most recent members and 3 matches per pair.
+
+**Reasoning:**
+- Cooperative rating requires running full episodes (not just score comparisons), making it 10-100x slower than Competitive rating. Blocking the event loop breaks all other archetypes while running.
+
+**Consequences:**
+- Recompute returns `{"status": "started"}` immediately. Frontend waits 5 seconds then re-fetches. Only the 10 most recent members are rated — older members retain their last known rating.
+
+---
+
+### ADR-017: Cooperative report detail lives at /research/cooperative/[report_id]
+
+**Context:** Mixed and Competitive reports use the shared `/research/[report_id]` detail page.
+
+**Decision:** Cooperative reports get a dedicated detail page at `/research/cooperative/[report_id]`.
+
+**Reasoning:**
+- The shared detail page renders Mixed/Competitive-specific metrics (score spread, cooperation rate, elimination events). Adding cooperative support would require significant branching that makes the page unmaintainable.
+
+**Consequences:**
+- The Research page Open button branches on `report.archetype === "Cooperative"` to route to the correct path. The shared detail page is unchanged.
+
+---
+
+### ADR-018: Cooperative reports saved as summary.json not report.json
+
+**Context:** Mixed and Competitive evaluation runners save their primary report file as `report.json`.
+
+**Decision:** Cooperative evaluation and robustness runners save as `summary.json`.
+
+**Consequences:**
+- `backend/api/routes_cooperative_reports.py` reads `summary.json`. This inconsistency should be normalized in a future cleanup — either rename cooperative to `report.json` or migrate Mixed/Competitive to `summary.json`.
