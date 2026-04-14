@@ -41,7 +41,7 @@ export default function CooperativeChampionRobustness({ data }: Props) {
   const CELL_W = 40;
   const CELL_H = 22;
   const LABEL_W = 100;
-  const HEADER_H = 90;
+  const HEADER_H = 0;
 
   return (
     <div>
@@ -93,25 +93,48 @@ export default function CooperativeChampionRobustness({ data }: Props) {
 
       {/* Heatmap */}
       <div style={{ overflowX: "auto" }}>
+        {/* Column headers as HTML above SVG — same approach as RobustHeatmap */}
+        <div style={{
+          display: "flex",
+          paddingLeft: LABEL_W,
+          marginBottom: 2,
+          minWidth: LABEL_W + sweep_names.length * CELL_W + 20,
+        }}>
+          {sweep_names.map((sn) => (
+            <div
+              key={sn}
+              style={{
+                width: CELL_W,
+                flexShrink: 0,
+                height: 100,
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                paddingBottom: 4,
+                overflow: "hidden",
+              }}
+            >
+              <div style={{
+                writingMode: "vertical-rl" as const,
+                transform: "rotate(180deg)",
+                fontSize: 9,
+                color: "#666666",
+                fontFamily: "monospace",
+                whiteSpace: "nowrap",
+                lineHeight: 1,
+              }}>
+                {labelShort(sn)}
+              </div>
+            </div>
+          ))}
+        </div>
+
         <svg
           width={LABEL_W + sweep_names.length * CELL_W + 20}
           height={HEADER_H + policies.length * CELL_H + 10}
           style={{ display: "block" }}
         >
-          {/* Column headers (vertical text) */}
-          {sweep_names.map((sn, j) => (
-            <text
-              key={sn}
-              x={LABEL_W + j * CELL_W + CELL_W / 2}
-              y={HEADER_H - 4}
-              fontSize={8}
-              fill="#666666"
-              textAnchor="end"
-              transform={`rotate(-60, ${LABEL_W + j * CELL_W + CELL_W / 2}, ${HEADER_H - 4})`}
-            >
-              {labelShort(sn)}
-            </text>
-          ))}
+          {/* Column headers moved to HTML above */}
 
           {/* Row labels + cells */}
           {policies.map((policy, i) => (
