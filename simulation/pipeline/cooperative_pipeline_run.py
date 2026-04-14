@@ -46,11 +46,12 @@ from simulation.training.ppo_shared import PPOConfig
 # Default storage locations
 # ---------------------------------------------------------------------------
 
-_AGENTS_DIR = Path("storage/agents/cooperative")
+_STORAGE_ROOT = Path(__file__).resolve().parent.parent.parent / "storage"
+_AGENTS_DIR = _STORAGE_ROOT / "agents/cooperative"
 _COOPERATIVE_PPO_DIR = _AGENTS_DIR / "ppo_shared"
-_PIPELINES_DIR = Path("storage/pipelines")
-_CONFIGS_DIR = Path("storage/configs")
-_REPORTS_DIR = Path("storage/reports")
+_PIPELINES_DIR = _STORAGE_ROOT / "pipelines"
+_CONFIGS_DIR = _STORAGE_ROOT / "configs"
+_REPORTS_DIR = _STORAGE_ROOT / "reports"
 
 _DEFAULT_RATING = 1000.0
 

@@ -26,7 +26,7 @@ from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
 from simulation.evaluation.cooperative_sweeps import CoopSweepSpec, apply_coop_sweep
 from simulation.training.ppo_shared import SharedPolicyNetwork
 
-_REPORTS_ROOT = Path("storage/reports")
+_REPORTS_ROOT = Path(__file__).resolve().parent.parent.parent / "storage" / "reports"
 
 
 # ---------------------------------------------------------------------------

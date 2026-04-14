@@ -132,7 +132,7 @@ The following deployment-readiness issues were fixed in PR #10:
 
 Audit conducted 2026-04-15 against all files added or modified for the Cooperative archetype.
 
-**Result: 5 issues found (2 Critical, 3 Major). All fixed. 500 tests pass. 0 TypeScript errors.**
+**Result: 8 issues found (2 Critical, 3 Major, 3 Minor). All fixed. 500 tests pass. 0 TypeScript errors.**
 
 ### Critical
 
@@ -149,13 +149,13 @@ Audit conducted 2026-04-15 against all files added or modified for the Cooperati
 | CP4 | Major | frontend/src/components/CooperativeReplayView.tsx, frontend/src/lib/api.ts | `streamCooperativeReplay`'s `onerror` handler called `onDone()` — the same callback as a successful close — so a 404 (run not found) or dropped SSE connection was indistinguishable from a clean finish. The component's `error` state was declared and displayed but never populated. User saw blank charts with no explanation. Fixed: added `onError?: (detail: string) => void` parameter to `streamCooperativeReplay`; `onerror` now calls `onError` with a descriptive message instead of `onDone`. The component passes an error callback that sets `error` state and marks `loaded=true`. | Fixed |
 | CP5 | Major | backend/schemas/api_models.py | `EnvironmentConfig` union type only listed `MixedEnvironmentConfig \| CompetitiveEnvironmentConfig`. The comment notes it is for documentation purposes, but omitting the cooperative type means any tooling that inspects this union (API schema generators, type stubs) gives an incomplete picture of accepted configs. Fixed: added `CooperativeEnvironmentConfig` to the union. | Fixed |
 
-### Minor (not fixed)
+### Minor
 
-| ID | Severity | File(s) | Description |
-|----|----------|---------|-------------|
-| CP-L1 | Minor | simulation/evaluation/cooperative_eval_runner.py, simulation/evaluation/cooperative_robustness.py | Module-level `_REPORTS_ROOT = Path("storage/reports")` is a relative path. Safe in practice because every caller passes an explicit `report_root=` argument, but the default is misleading and would silently fail if these functions were ever called standalone from a non-root directory. |
-| CP-L2 | Minor | backend/api/routes_cooperative_league.py | `GET /api/cooperative/league/champion` returns HTTP 404 when the league is empty. The frontend handles this gracefully with `.catch(() => null)`, but the endpoint semantics differ from the Mixed archetype's league endpoint. Should be normalized to return an empty response (`{}` or `null`) in a future cleanup. |
-| CP-L3 | Minor | simulation/pipeline/cooperative_pipeline_run.py | Module-level `_AGENTS_DIR`, `_COOPERATIVE_PPO_DIR`, `_PIPELINES_DIR`, `_CONFIGS_DIR`, `_REPORTS_DIR` are all relative paths. Now unreachable through the API (C2 fix ensures callers always supply absolute overrides), but standalone script invocations from non-root directories would still fail. |
+| ID | Severity | File(s) | Description | Status |
+|----|----------|---------|-------------|--------|
+| CP-L1 | Minor | simulation/evaluation/cooperative_eval_runner.py, simulation/evaluation/cooperative_robustness.py | Module-level `_REPORTS_ROOT = Path("storage/reports")` is a relative path. Safe in practice because every caller passes an explicit `report_root=` argument, but the default is misleading and would silently fail if these functions were ever called standalone from a non-root directory. | Fixed — changed to `Path(__file__).resolve().parent.parent.parent / "storage" / "reports"` |
+| CP-L2 | Minor | backend/api/routes_cooperative_league.py | `GET /api/cooperative/league/champion` returns HTTP 404 when the league is empty. The frontend handles this gracefully with `.catch(() => null)`, but the endpoint semantics differ from the Mixed archetype's league endpoint. Should be normalized to return an empty response (`{}` or `null`) in a future cleanup. | Fixed — endpoint now returns `{"member_id": None}` on empty league, matching Mixed archetype behavior. Test updated accordingly. |
+| CP-L3 | Minor | simulation/pipeline/cooperative_pipeline_run.py | Module-level `_AGENTS_DIR`, `_COOPERATIVE_PPO_DIR`, `_PIPELINES_DIR`, `_CONFIGS_DIR`, `_REPORTS_DIR` are all relative paths. Now unreachable through the API (C2 fix ensures callers always supply absolute overrides), but standalone script invocations from non-root directories would still fail. | Fixed — introduced `_STORAGE_ROOT = Path(__file__).resolve().parent.parent.parent / "storage"` and derived all five path constants from it. |
 
 ### Scope check — existing archetypes not modified
 

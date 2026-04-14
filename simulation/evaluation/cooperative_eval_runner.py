@@ -24,7 +24,7 @@ from simulation.adapters.cooperative_pettingzoo import CooperativePettingZooPara
 from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
 from simulation.training.ppo_shared import SharedPolicyNetwork
 
-_REPORTS_ROOT = Path("storage/reports")
+_REPORTS_ROOT = Path(__file__).resolve().parent.parent.parent / "storage" / "reports"
 
 
 # ---------------------------------------------------------------------------
