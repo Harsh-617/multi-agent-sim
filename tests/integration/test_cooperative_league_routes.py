@@ -163,10 +163,9 @@ class TestGetCoopMember:
 
 
 class TestGetCoopChampion:
-    def test_empty_league_returns_null_member_id(self, client: TestClient):
+    def test_empty_league_returns_404(self, client: TestClient):
         resp = client.get("/api/cooperative/league/champion")
-        assert resp.status_code == 200
-        assert resp.json()["member_id"] is None
+        assert resp.status_code == 404
 
     def test_champion_is_highest_rated(self, client: TestClient, league_dir: Path):
         mid1 = _make_fake_member(league_dir, rating=900.0)

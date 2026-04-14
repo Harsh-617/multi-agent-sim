@@ -209,11 +209,11 @@ async def get_coop_champion() -> dict:
     """Return the highest-rated cooperative league member."""
     members = _registry.list_members()
     if not members:
-        return {"member_id": None}
+        raise HTTPException(status_code=404, detail="No cooperative league members exist.")
     ratings = _ratings_map()
     champ = _find_champion(members, ratings)
     if champ is None:
-        return {"member_id": None}
+        raise HTTPException(status_code=404, detail="No cooperative league members exist.")
     return champ
 
 
