@@ -541,6 +541,8 @@ export default function LeaguePage() {
   const [coopRobEpisodesPerSeed, setCoopRobEpisodesPerSeed] = useState(2);
   const [coopRobSeed, setCoopRobSeed] = useState(42);
   const [coopConfigs, setCoopConfigs] = useState<ConfigListItem[]>([]);
+  const [coopFilteredConfigs, setCoopFilteredConfigs] = useState<ConfigListItem[]>([]);
+  const [coopFilteredLoading, setCoopFilteredLoading] = useState(false);
   const [coopBenchConfigId, setCoopBenchConfigId] = useState("default");
   const [coopBenchEpisodes, setCoopBenchEpisodes] = useState(5);
   const [coopBenchRunning, setCoopBenchRunning] = useState(false);
@@ -686,6 +688,38 @@ export default function LeaguePage() {
     filter();
     return () => { cancelled = true; };
   }, [hhConfigs]);
+
+  // Filter coopConfigs to only cooperative configs for inline Coop dropdowns
+  useEffect(() => {
+    if (coopConfigs.length === 0) {
+      setCoopFilteredConfigs([]);
+      return;
+    }
+    let cancelled = false;
+    async function filter() {
+      setCoopFilteredLoading(true);
+      const results: ConfigListItem[] = [];
+      for (const c of coopConfigs) {
+        try {
+          const detail = await getConfigDetail(c.config_id);
+          const identity = detail.identity as Record<string, unknown> | undefined;
+          if (identity?.environment_type === "cooperative") {
+            results.push(c);
+          }
+        } catch { /* skip */ }
+      }
+      if (!cancelled) {
+        setCoopFilteredConfigs(results);
+        if (results.length > 0) {
+          setCoopBenchConfigId(results[0].config_id);
+          setCoopRobConfigId(results[0].config_id);
+        }
+        setCoopFilteredLoading(false);
+      }
+    }
+    filter();
+    return () => { cancelled = true; };
+  }, [coopConfigs]);
 
   // --- Resource Sharing handlers ---
   async function handleRsRecompute() {
@@ -1905,15 +1939,19 @@ export default function LeaguePage() {
                     <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Config</label>
-                        <select
-                          value={coopBenchConfigId}
-                          onChange={(e) => setCoopBenchConfigId(e.target.value)}
-                          style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)" }}
-                        >
-                          {coopConfigs.map((c) => (
-                            <option key={c.config_id} value={c.config_id}>{c.config_id}</option>
-                          ))}
-                        </select>
+                        {coopFilteredLoading ? (
+                          <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Loading configs...</span>
+                        ) : (
+                          <select
+                            value={coopBenchConfigId}
+                            onChange={(e) => setCoopBenchConfigId(e.target.value)}
+                            style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                          >
+                            {coopFilteredConfigs.map((c) => (
+                              <option key={c.config_id} value={c.config_id}>{c.config_id} (agents={c.num_agents}, steps={c.max_steps})</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Episodes</label>
@@ -1925,8 +1963,8 @@ export default function LeaguePage() {
                       </div>
                       <button
                         onClick={handleCoopBenchmark}
-                        disabled={coopBenchRunning || coopConfigs.length === 0 || coopMembers.length === 0}
-                        style={{ padding: "4px 12px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: (coopBenchRunning || coopConfigs.length === 0 || coopMembers.length === 0) ? 0.5 : 1 }}
+                        disabled={coopBenchRunning || coopFilteredConfigs.length === 0 || coopMembers.length === 0 || coopFilteredLoading}
+                        style={{ padding: "4px 12px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: (coopBenchRunning || coopFilteredConfigs.length === 0 || coopMembers.length === 0 || coopFilteredLoading) ? 0.5 : 1 }}
                       >
                         {coopBenchRunning ? "Running..." : "Run Champion Benchmark"}
                       </button>
@@ -1955,15 +1993,19 @@ export default function LeaguePage() {
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
                           <div>
                             <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Config</label>
-                            <select
-                              value={coopRobConfigId}
-                              onChange={(e) => setCoopRobConfigId(e.target.value)}
-                              style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)" }}
-                            >
-                              {coopConfigs.map((c) => (
-                                <option key={c.config_id} value={c.config_id}>{c.config_id}</option>
-                              ))}
-                            </select>
+                            {coopFilteredLoading ? (
+                              <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Loading configs...</span>
+                            ) : (
+                              <select
+                                value={coopRobConfigId}
+                                onChange={(e) => setCoopRobConfigId(e.target.value)}
+                                style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                              >
+                                {coopFilteredConfigs.map((c) => (
+                                  <option key={c.config_id} value={c.config_id}>{c.config_id} (agents={c.num_agents}, steps={c.max_steps})</option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                           <div>
                             <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Seeds</label>

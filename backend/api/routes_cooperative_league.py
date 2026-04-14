@@ -419,9 +419,14 @@ async def coop_champion_benchmark(req: CoopChampionBenchmarkRequest) -> dict:
             raise HTTPException(
                 status_code=404, detail=f"Config '{req.config_id}' not found."
             )
-        config = CooperativeEnvironmentConfig.model_validate_json(
-            config_path.read_text(encoding="utf-8")
-        )
+        raw = config_path.read_text(encoding="utf-8")
+        raw_data = json.loads(raw)
+        if raw_data.get("identity", {}).get("environment_type") != "cooperative":
+            raise HTTPException(
+                status_code=422,
+                detail=f"Config '{req.config_id}' is not a cooperative config.",
+            )
+        config = CooperativeEnvironmentConfig.model_validate_json(raw)
 
     members = _registry.list_members()
     if not members:
