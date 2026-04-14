@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import NetworkBackground from "@/components/NetworkBackground";
+import { getCooperativeRuns, getCooperativeLeagueMembers, CooperativeRunListItem } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +20,7 @@ interface RecentRun {
   run_id: string;
   agent_policy: string | null;
   timestamp: string | null;
+  archetype?: "rs" | "hh" | "cp";
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
     reports: "—",
   });
   const [failCount, setFailCount] = useState(0);
-  const totalFetches = 3;
+  const totalFetches = 4;
 
   useEffect(() => {
     let fails = 0;
@@ -42,10 +44,12 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
       if (fails >= totalFetches) setFailCount(fails);
     };
 
-    fetch("/api/runs/history")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data: unknown[]) =>
-        setStats((s) => ({ ...s, totalRuns: String(data.length) }))
+    Promise.all([
+      fetch("/api/runs/history").then((r) => (r.ok ? r.json() : Promise.reject())),
+      getCooperativeRuns(),
+    ])
+      .then(([rsHh, cp]: [unknown[], CooperativeRunListItem[]]) =>
+        setStats((s) => ({ ...s, totalRuns: String(rsHh.length + cp.length) }))
       )
       .catch(trackFail);
 
@@ -56,11 +60,12 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
       fetch("/api/competitive/league/members").then((r) =>
         r.ok ? r.json() : Promise.reject()
       ),
+      getCooperativeLeagueMembers(),
     ])
-      .then(([mixed, comp]: [unknown[], unknown[]]) =>
+      .then(([mixed, comp, coop]: [unknown[], unknown[], unknown[]]) =>
         setStats((s) => ({
           ...s,
-          leagueMembers: String(mixed.length + comp.length),
+          leagueMembers: String(mixed.length + comp.length + coop.length),
         }))
       )
       .catch(trackFail);
@@ -72,14 +77,20 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
       fetch("/api/competitive/reports").then((r) =>
         r.ok ? r.json() : Promise.reject()
       ),
+      fetch("/api/cooperative/reports").then((r) =>
+        r.ok ? r.json() : Promise.reject()
+      ),
     ])
-      .then(([mixed, comp]: [unknown[], unknown[]]) =>
+      .then(([mixed, comp, coop]: [unknown[], unknown[], unknown[]]) =>
         setStats((s) => ({
           ...s,
-          reports: String(mixed.length + comp.length),
+          reports: String(mixed.length + comp.length + coop.length),
         }))
       )
       .catch(trackFail);
+
+    // environments is a static count — no fetch needed
+    setStats((s) => ({ ...s, environments: "3" }));
   }, []);
 
   return { stats, hasError: failCount >= totalFetches };
@@ -89,21 +100,53 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
 // Recent runs hook
 // ---------------------------------------------------------------------------
 
+interface RawRun {
+  run_id: string;
+  agent_policy?: string | null;
+  timestamp?: string | null;
+  written_at?: string | null;
+}
+
 function useRecentRuns(): RecentRun[] {
   const [runs, setRuns] = useState<RecentRun[]>([]);
 
   useEffect(() => {
-    fetch("/api/runs/history")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data: RecentRun[]) => {
-        const sorted = [...data].sort((a, b) => {
-          const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-          const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-          return tb - ta;
-        });
-        setRuns(sorted.slice(0, 3));
-      })
-      .catch(() => {});
+    Promise.allSettled([
+      fetch("/api/runs/history").then((r) =>
+        r.ok ? (r.json() as Promise<RawRun[]>) : Promise.reject()
+      ),
+      getCooperativeRuns(),
+    ]).then(([rsHhResult, cpResult]) => {
+      const combined: RecentRun[] = [];
+
+      if (rsHhResult.status === "fulfilled") {
+        for (const r of rsHhResult.value) {
+          combined.push({
+            run_id: r.run_id,
+            agent_policy: r.agent_policy ?? null,
+            timestamp: r.timestamp ?? null,
+          });
+        }
+      }
+
+      if (cpResult.status === "fulfilled") {
+        for (const r of cpResult.value) {
+          combined.push({
+            run_id: r.run_id,
+            agent_policy: r.agent_policy ?? null,
+            timestamp: r.written_at ?? null,
+            archetype: "cp",
+          });
+        }
+      }
+
+      const sorted = combined.sort((a, b) => {
+        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return tb - ta;
+      });
+      setRuns(sorted.slice(0, 3));
+    });
   }, []);
 
   return runs;
@@ -348,6 +391,22 @@ function LiveSnapshotCard({
               <span style={{ fontSize: 11, color: "#444444", ...mono }}>
                 {run.run_id.slice(0, 8)}
               </span>
+              {run.archetype && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    color: run.archetype === "cp" ? "#22d3ee" : run.archetype === "hh" ? "#f59e0b" : "#14b8a6",
+                    border: `1px solid ${run.archetype === "cp" ? "#22d3ee33" : run.archetype === "hh" ? "#f59e0b33" : "#14b8a633"}`,
+                    borderRadius: 3,
+                    padding: "1px 4px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    flexShrink: 0,
+                  }}
+                >
+                  {run.archetype === "cp" ? "coop" : run.archetype}
+                </span>
+              )}
               <span style={{ fontSize: 10, color: "#555555" }}>
                 {run.agent_policy ?? "—"}
               </span>
