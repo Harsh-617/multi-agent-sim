@@ -1004,6 +1004,10 @@ export default function LeaguePage() {
     return rb - ra || a.member_id.localeCompare(b.member_id);
   });
 
+  const coopSorted = [...coopMembers].sort((a, b) =>
+    (b.rating ?? 0) - (a.rating ?? 0) || a.member_id.localeCompare(b.member_id)
+  );
+
   // Resource Sharing champion (highest rated)
   const rsChampion: LeagueMember | null =
     rsSorted.length > 0 ? rsSorted[0] : null;
@@ -1258,9 +1262,7 @@ export default function LeaguePage() {
       {/* Sub-tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--bg-border)", marginBottom: "32px" }}>
         {(["ratings", "champion", "evolution"] as Tab[]).map((t) => {
-          const label = isCoop
-            ? t === "ratings" ? "Lineage" : t === "champion" ? "Champion" : "Evolution"
-            : t.charAt(0).toUpperCase() + t.slice(1);
+          const label = t.charAt(0).toUpperCase() + t.slice(1);
           return (
             <button
               key={t}
@@ -1793,14 +1795,43 @@ export default function LeaguePage() {
           {/* ============================================================ */}
           {isCoop && (
             <>
-              {/* Lineage tab (= ratings) */}
+              {/* Ratings tab */}
               {tab === "ratings" && (
-                coopLineage.length === 0 ? (
+                coopSorted.length === 0 ? (
                   <p style={{ color: "var(--text-secondary)" }}>
                     No league members yet — run the cooperative pipeline first.
                   </p>
                 ) : (
-                  <CooperativeLeagueLineage members={coopLineage} />
+                  <table style={{ width: "100%", textAlign: "left", fontSize: 13, borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--bg-border)" }}>
+                        <th style={{ padding: "8px 16px 8px 0" }}>#</th>
+                        <th style={{ padding: "8px 16px 8px 0" }}>Member ID</th>
+                        <th style={{ padding: "8px 16px 8px 0" }}>Rating</th>
+                        <th style={{ padding: "8px 16px 8px 0" }}>Parent</th>
+                        <th style={{ padding: "8px 16px 8px 0" }}>Created</th>
+                        <th style={{ padding: "8px 16px 8px 0" }}>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coopSorted.map((m, idx) => (
+                        <tr key={m.member_id} style={{ borderBottom: "1px solid var(--bg-border)" }}>
+                          <td style={{ padding: "8px 16px 8px 0", color: "var(--text-tertiary)" }}>{idx + 1}</td>
+                          <td style={{ padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)" }}>{m.member_id}</td>
+                          <td style={{ padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)" }}>
+                            {m.rating != null ? m.rating.toFixed(1) : "—"}
+                          </td>
+                          <td style={{ padding: "8px 16px 8px 0", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                            {m.parent_id ?? "—"}
+                          </td>
+                          <td style={{ padding: "8px 16px 8px 0", fontSize: 12, color: "var(--text-secondary)" }}>
+                            {m.created_at ? new Date(m.created_at).toLocaleString() : "—"}
+                          </td>
+                          <td style={{ padding: "8px 16px 8px 0", fontSize: 12 }}>{m.notes ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )
               )}
 
