@@ -121,38 +121,43 @@ export default function RunPage() {
     rawSummary && !isCompetitiveSummary(rawSummary) ? (rawSummary as EpisodeSummary) : null;
 
   return (
-    <main className="max-w-4xl mx-auto p-8">
-      <div className="flex items-center justify-between mb-6">
+    <main style={{ maxWidth: 896, margin: "0 auto", padding: "48px 24px", paddingTop: 96 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <Link href="/simulate/head-to-head" className="text-blue-500 hover:underline text-sm">
+          <Link
+            href="/simulate/head-to-head"
+            style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none" }}
+          >
             &larr; Head-to-Head
           </Link>
-          <h1 className="text-2xl font-bold">
-            Run <span className="font-mono">{run_id}</span>
+          <h1 style={{ fontSize: 22, fontWeight: 500, color: "var(--text-primary)", margin: "4px 0 0" }}>
+            Run{" "}
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 18 }}>{run_id}</span>
           </h1>
         </div>
         {!done && <StopRunButton onStopped={() => setDone(true)} />}
       </div>
 
       {/* Status bar */}
-      <div className="flex gap-4 items-center mb-6 text-sm">
+      <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 24, fontSize: 13, color: "var(--text-secondary)" }}>
         <span>
           WebSocket:{" "}
           <span
-            className={
-              wsStatus === "open"
-                ? "text-green-500"
-                : wsStatus === "connecting"
-                ? "text-yellow-500"
-                : "text-red-500"
-            }
+            style={{
+              color:
+                wsStatus === "open"
+                  ? "var(--accent)"
+                  : wsStatus === "connecting"
+                  ? "#eab308"
+                  : "#ef4444",
+            }}
           >
             {wsStatus}
           </span>
         </span>
         <span>Step: {currentStep}</span>
         {done && (
-          <span className="font-semibold text-orange-500">
+          <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>
             Done &mdash; {terminationReason}
           </span>
         )}
@@ -163,11 +168,11 @@ export default function RunPage() {
 
       {/* Events log */}
       {events.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold mb-2">Events</h2>
-          <ul className="text-sm space-y-1 max-h-40 overflow-y-auto">
+        <div style={{ marginTop: 24 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>Events</h2>
+          <ul style={{ fontSize: 12, listStyle: "none", padding: 0, margin: 0, maxHeight: 160, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
             {events.map((ev, i) => (
-              <li key={i} className="font-mono">
+              <li key={i} style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
                 [step {ev.step}] {ev.event}
                 {ev.agent_id ? ` agent=${ev.agent_id}` : ""}
                 {ev.shared_pool !== undefined ? ` pool=${ev.shared_pool.toFixed(2)}` : ""}
@@ -181,20 +186,20 @@ export default function RunPage() {
       {competitiveSummary ? (
         <CompetitiveRunSummary summary={competitiveSummary} />
       ) : mixedSummary ? (
-        <div className="mt-6 p-4 border border-gray-300 rounded">
-          <h2 className="text-lg font-semibold mb-2">Episode Summary</h2>
-          <dl className="grid grid-cols-2 gap-2 text-sm">
-            <dt className="font-medium">Length</dt>
-            <dd>{mixedSummary.episode_length} steps</dd>
-            <dt className="font-medium">Termination</dt>
-            <dd>{mixedSummary.termination_reason}</dd>
-            <dt className="font-medium">Final Shared Pool</dt>
-            <dd>{mixedSummary.final_shared_pool.toFixed(2)}</dd>
+        <div style={{ marginTop: 24, padding: 16, border: "1px solid var(--bg-border)", borderRadius: 6, background: "var(--bg-surface)" }}>
+          <h2 style={{ fontSize: 15, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>Episode Summary</h2>
+          <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 8px", fontSize: 13 }}>
+            <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Length</dt>
+            <dd style={{ color: "var(--text-primary)" }}>{mixedSummary.episode_length} steps</dd>
+            <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Termination</dt>
+            <dd style={{ color: "var(--text-primary)" }}>{mixedSummary.termination_reason}</dd>
+            <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Final Shared Pool</dt>
+            <dd style={{ color: "var(--text-primary)" }}>{mixedSummary.final_shared_pool.toFixed(2)}</dd>
           </dl>
-          <h3 className="text-sm font-semibold mt-3 mb-1">Total Reward per Agent</h3>
-          <ul className="text-sm space-y-1">
+          <h3 style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginTop: 12, marginBottom: 6 }}>Total Reward per Agent</h3>
+          <ul style={{ fontSize: 12, listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 3 }}>
             {Object.entries(mixedSummary.total_reward_per_agent).map(([agentId, reward]) => (
-              <li key={agentId} className="font-mono">
+              <li key={agentId} style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
                 {agentId.slice(0, 8)}: {reward.toFixed(3)}
               </li>
             ))}

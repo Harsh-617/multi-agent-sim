@@ -65,37 +65,42 @@ export default function ReplayPage() {
   }, [run_id, handleMessage]);
 
   return (
-    <main className="max-w-4xl mx-auto p-8">
-      <div className="flex items-center justify-between mb-6">
+    <main style={{ maxWidth: 896, margin: "0 auto", padding: "48px 24px", paddingTop: 96 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <Link href="/simulate/resource-sharing" className="text-blue-500 hover:underline text-sm">
+          <Link
+            href="/simulate/resource-sharing"
+            style={{ fontSize: 13, color: "var(--text-tertiary)", textDecoration: "none" }}
+          >
             &larr; Resource Sharing
           </Link>
-          <h1 className="text-2xl font-bold">
-            Replay <span className="font-mono">{run_id}</span>
+          <h1 style={{ fontSize: 22, fontWeight: 500, color: "var(--text-primary)", margin: "4px 0 0" }}>
+            Replay{" "}
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 18 }}>{run_id}</span>
           </h1>
         </div>
       </div>
 
       {/* Status bar */}
-      <div className="flex gap-4 items-center mb-6 text-sm">
+      <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 24, fontSize: 13, color: "var(--text-secondary)" }}>
         <span>
           Status:{" "}
           <span
-            className={
-              status === "streaming"
-                ? "text-green-500"
-                : status === "connecting"
-                ? "text-yellow-500"
-                : "text-blue-500"
-            }
+            style={{
+              color:
+                status === "streaming"
+                  ? "var(--accent)"
+                  : status === "connecting"
+                  ? "#eab308"
+                  : "var(--text-tertiary)",
+            }}
           >
             {status}
           </span>
         </span>
         <span>Step: {currentStep}</span>
         {done && (
-          <span className="font-semibold text-orange-500">
+          <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>
             Done &mdash; {terminationReason}
           </span>
         )}
@@ -112,33 +117,33 @@ export default function ReplayPage() {
 
       {/* Episode summary */}
       {summary && (
-        <div className="mt-6 p-4 border border-gray-300 rounded">
-          <h2 className="text-lg font-semibold mb-2">Episode Summary</h2>
-          <dl className="grid grid-cols-2 gap-2 text-sm">
-            <dt className="font-medium">Length</dt>
-            <dd>{summary.episode_length} steps</dd>
-            <dt className="font-medium">Termination</dt>
-            <dd>{summary.termination_reason}</dd>
+        <div style={{ marginTop: 24, padding: 16, border: "1px solid var(--bg-border)", borderRadius: 6, background: "var(--bg-surface)" }}>
+          <h2 style={{ fontSize: 15, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>Episode Summary</h2>
+          <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 8px", fontSize: 13 }}>
+            <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Length</dt>
+            <dd style={{ color: "var(--text-primary)" }}>{summary.episode_length} steps</dd>
+            <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Termination</dt>
+            <dd style={{ color: "var(--text-primary)" }}>{summary.termination_reason}</dd>
             {summary && isCompetitiveSummary(summary) ? (
               <>
-                <dt className="font-medium">Winner</dt>
-                <dd>{summary.winner_id ?? "none"}</dd>
-                <dt className="font-medium">Score Spread</dt>
-                <dd>{summary.score_spread.toFixed(2)}</dd>
-                <dt className="font-medium">Eliminations</dt>
-                <dd>{summary.num_eliminations}</dd>
+                <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Winner</dt>
+                <dd style={{ color: "var(--text-primary)" }}>{summary.winner_id ?? "none"}</dd>
+                <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Score Spread</dt>
+                <dd style={{ color: "var(--text-primary)" }}>{summary.score_spread.toFixed(2)}</dd>
+                <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Eliminations</dt>
+                <dd style={{ color: "var(--text-primary)" }}>{summary.num_eliminations}</dd>
               </>
             ) : (
               <>
-                <dt className="font-medium">Final Shared Pool</dt>
-                <dd>{(summary as EpisodeSummary).final_shared_pool.toFixed(2)}</dd>
+                <dt style={{ color: "var(--text-secondary)", fontWeight: 500 }}>Final Shared Pool</dt>
+                <dd style={{ color: "var(--text-primary)" }}>{(summary as EpisodeSummary).final_shared_pool.toFixed(2)}</dd>
               </>
             )}
           </dl>
-          <h3 className="text-sm font-semibold mt-3 mb-1">Total Reward per Agent</h3>
-          <ul className="text-sm space-y-1">
+          <h3 style={{ fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginTop: 12, marginBottom: 6 }}>Total Reward per Agent</h3>
+          <ul style={{ fontSize: 12, listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 3 }}>
             {Object.entries(summary.total_reward_per_agent).map(([agentId, reward]) => (
-              <li key={agentId} className="font-mono">
+              <li key={agentId} style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
                 {agentId.slice(0, 8)}: {reward.toFixed(3)}
               </li>
             ))}
