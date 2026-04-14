@@ -13,7 +13,7 @@ import {
   StepEvent,
   RunDetail,
 } from "@/lib/api";
-import MetricsChart from "@/components/MetricsChart";
+import CompetitiveMetricsChart from "@/components/CompetitiveMetricsChart";
 import CompetitiveRunSummary from "@/components/CompetitiveRunSummary";
 import StopRunButton from "@/components/StopRunButton";
 import Link from "next/link";
@@ -164,7 +164,7 @@ export default function RunPage() {
       </div>
 
       {/* Live chart */}
-      <MetricsChart history={history} />
+      <CompetitiveMetricsChart history={history} />
 
       {/* Events log */}
       {events.length > 0 && (
