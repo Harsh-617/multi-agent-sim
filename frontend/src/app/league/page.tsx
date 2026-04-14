@@ -290,11 +290,12 @@ interface PipelinePanelProps {
   running: boolean;
   config: PipelineConfig;
   onConfigChange: (config: PipelineConfig) => void;
+  reportBasePath?: string;
 }
 
 function PipelinePanel({
   label, accentColor, stage, error, reportId, onRun, running,
-  config, onConfigChange,
+  config, onConfigChange, reportBasePath = "/research/",
 }: PipelinePanelProps) {
   const [showSettings, setShowSettings] = useState(false);
 
@@ -426,7 +427,7 @@ function PipelinePanel({
               ✓ Complete
               {reportId && (
                 <a
-                  href={`/research/${reportId}`}
+                  href={`${reportBasePath}${reportId}`}
                   style={{
                     color: accentColor,
                     marginLeft: 8,
@@ -1165,6 +1166,7 @@ export default function LeaguePage() {
               coopPipelineStage !== "error"}
             config={coopPipelineConfig}
             onConfigChange={setCoopPipelineConfig}
+            reportBasePath="/research/cooperative/"
           />
         </div>
       </div>
@@ -1924,7 +1926,7 @@ export default function LeaguePage() {
                         {coopRobStage === "done" && coopRobReportId && (
                           <p style={{ fontSize: 13, color: "var(--accent)", marginTop: 8 }}>
                             Complete!{" "}
-                            <a href={`/research/${encodeURIComponent(coopRobReportId)}`} style={{ textDecoration: "underline", fontWeight: 500 }}>
+                            <a href={`/research/cooperative/${encodeURIComponent(coopRobReportId)}`} style={{ textDecoration: "underline", fontWeight: 500 }}>
                               View report &rarr;
                             </a>
                           </p>
