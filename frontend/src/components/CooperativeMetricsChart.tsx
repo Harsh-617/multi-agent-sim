@@ -40,8 +40,8 @@ function colorFor(index: number): string {
 }
 
 const CHART_W = 500;
-const CHART_H = 130;
-const PAD = { top: 8, right: 16, bottom: 22, left: 44 };
+const CHART_H = 200;
+const PAD = { top: 12, right: 16, bottom: 28, left: 52 };
 const PLOT_W = CHART_W - PAD.left - PAD.right;
 const PLOT_H = CHART_H - PAD.top - PAD.bottom;
 
@@ -139,13 +139,6 @@ function polylinePoints(
 // Shared axis labels & grid lines
 // ---------------------------------------------------------------------------
 
-interface AxisProps {
-  lo: number;
-  hi: number;
-  steps: number[];
-  label: string;
-}
-
 function YAxis({ lo, hi, label }: { lo: number; hi: number; label: string }) {
   return (
     <g>
@@ -153,7 +146,7 @@ function YAxis({ lo, hi, label }: { lo: number; hi: number; label: string }) {
         x={4}
         y={PAD.top + PLOT_H / 2}
         textAnchor="middle"
-        fontSize={9}
+        fontSize={10}
         fill="var(--text-tertiary)"
         transform={`rotate(-90, 4, ${PAD.top + PLOT_H / 2})`}
       >
@@ -174,9 +167,9 @@ function YAxis({ lo, hi, label }: { lo: number; hi: number; label: string }) {
             />
             <text
               x={PAD.left - 4}
-              y={yPx + 3}
+              y={yPx + 4}
               textAnchor="end"
-              fontSize={8}
+              fontSize={10}
               fill="var(--text-tertiary)"
             >
               {Number.isInteger(val) ? val : val.toFixed(2)}
@@ -194,18 +187,18 @@ function XAxisLabels({ steps }: { steps: number[] }) {
     <g>
       <text
         x={PAD.left}
-        y={CHART_H - 4}
+        y={CHART_H - 6}
         textAnchor="start"
-        fontSize={8}
+        fontSize={10}
         fill="var(--text-tertiary)"
       >
         {steps[0]}
       </text>
       <text
         x={PAD.left + PLOT_W}
-        y={CHART_H - 4}
+        y={CHART_H - 6}
         textAnchor="end"
-        fontSize={8}
+        fontSize={10}
         fill="var(--text-tertiary)"
       >
         {steps[steps.length - 1]}
