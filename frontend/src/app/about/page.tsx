@@ -32,11 +32,11 @@ const border: React.CSSProperties = {
 /* ── data ── */
 
 const stats = [
-  { value: "2", label: "Environment archetypes" },
-  { value: "11", label: "Strategy cluster labels" },
+  { value: "3", label: "Environment archetypes" },
+  { value: "16", label: "Strategy cluster labels" },
   { value: "20", label: "Robustness sweep variants" },
-  { value: "5+5", label: "Baseline agent policies" },
-  { value: "266", label: "Automated tests passing" },
+  { value: "5+5+5", label: "Baseline agent policies" },
+  { value: "500", label: "Automated tests passing" },
   { value: "1", label: "Command to run full pipeline" },
 ];
 
@@ -44,7 +44,7 @@ const steps = [
   {
     num: "01",
     title: "Configure",
-    desc: "Choose a simulation template — Resource Sharing or Head-to-Head. Set the number of agents, episode length, random seed, and behavioral parameters such as memory depth, information asymmetry, and observation noise. Save your config to reuse it across multiple runs.",
+    desc: "Choose a simulation template — Resource Sharing, Head-to-Head, or Cooperative Task Arena. Set the number of agents, episode length, random seed, and behavioral parameters such as memory depth, information asymmetry, and observation noise. Save your config to reuse it across multiple runs.",
   },
   {
     num: "02",
@@ -127,6 +127,25 @@ const pages = [
     ],
   },
   {
+    label: "/ simulate / cooperative",
+    url: "/simulate/cooperative",
+    heading: "Cooperative Task Arena — configure and start a run",
+    description:
+      "The full configuration page for the Cooperative Task Arena environment. Same layout as the other templates — config on the left, run history on the right.",
+    sections: [
+      {
+        name: "Config panel (left)",
+        detail:
+          "set number of agents, episode length, number of task types, seed, and agent policy. Available policies: Random, Always Work, Always Idle, Specialist, Balancer, and the trained Cooperative PPO agent. Advanced parameters include effort capacity, specialization scale, specialization decay, task arrival rate, task difficulty, collapse threshold, observation noise, and reward weights (group, individual, efficiency).",
+      },
+      {
+        name: "Run history panel (right)",
+        detail:
+          "shows all past Cooperative runs sorted newest first. Each row shows the policy used, number of steps, termination reason (max steps, system collapse, or perfect clearance), and timestamp. Click any row to open the replay.",
+      },
+    ],
+  },
+  {
     label: "/ simulate / [template] / run / [id]",
     url: "",
     heading: "Live run page — watch a simulation in real time",
@@ -174,7 +193,7 @@ const pages = [
       {
         name: "Pipeline panel",
         detail:
-          "at the top of the page. Configure training steps, snapshot interval, and seed, then click Run Pipeline. The panel polls the backend and shows live stage updates (training → snapshotting → rating → evaluating → done). When complete, a link to the generated report appears. Both archetypes have their own pipeline controls.",
+          "at the top of the page. Configure training steps, snapshot interval, and seed, then click Run Pipeline. The panel polls the backend and shows live stage updates (training → snapshotting → rating → evaluating → done). When complete, a link to the generated report appears. All three archetypes have their own pipeline controls.",
       },
       {
         name: "Ratings tab",
@@ -208,7 +227,7 @@ const pages = [
       {
         name: "Filter bar",
         detail:
-          "filter reports by environment (Resource Sharing, Head-to-Head, or All) and by report type (Robustness, Strategy, Benchmark, or All). Filters can be combined.",
+          "filter reports by environment (Resource Sharing, Head-to-Head, Cooperative Task Arena, or All) and by report type (Robustness, Strategy, Benchmark, or All). Filters can be combined.",
       },
       {
         name: "Sort control",
@@ -270,6 +289,7 @@ const capabilities = [
     items: [
       "Configurable shared-resource environment (Resource Sharing)",
       "Configurable zero-sum competitive environment (Head-to-Head)",
+      "Configurable cooperative task environment (Cooperative Task Arena)",
       "4 action types per archetype with amount validation",
       "7 behavioral layers: memory, reputation, asymmetry, noise, incentives",
       "3-component reward model: individual + group + relational",
@@ -310,7 +330,7 @@ const capabilities = [
       "SSE streaming for replay playback",
       "Filesystem-backed storage \u2014 no database required",
       "Next.js 14 dashboard with dark theme",
-      "266 automated tests: 22 unit modules + 4 integration modules",
+      "500 automated tests: unit and integration modules across all three archetypes",
     ],
   },
 ];
@@ -797,7 +817,7 @@ export default function AboutPage() {
       <section style={{ ...wrap, padding: "60px 48px", ...border }}>
         <p style={sectionLabel}>Environments</p>
         <h2 style={{ ...sectionHeading, marginBottom: 40 }}>
-          Two archetypes, two research questions
+          Three archetypes, three research questions
         </h2>
         <div
           className="about-archetypes"
@@ -962,6 +982,81 @@ export default function AboutPage() {
               "Configurable opponent observation and history sensitivity",
               "Elimination mechanic with configurable threshold",
               "Core question: which strategies survive elimination pressure?",
+            ].map((m) => (
+              <div
+                key={m}
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.8,
+                }}
+              >
+                · {m}
+              </div>
+            ))}
+          </div>
+
+          {/* Cooperative */}
+          <div
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--bg-border)",
+              borderTop: "2px solid #22d3ee",
+              borderRadius: 8,
+              padding: 28,
+            }}
+          >
+            <span
+              style={{
+                ...mono,
+                fontSize: 10,
+                textTransform: "uppercase",
+                color: "#22d3ee",
+                marginBottom: 12,
+                display: "block",
+              }}
+            >
+              Purely Cooperative
+            </span>
+            <h3
+              style={{
+                fontSize: 18,
+                fontWeight: 500,
+                color: "var(--text-primary)",
+                marginBottom: 12,
+                marginTop: 0,
+              }}
+            >
+              Cooperative Task Arena
+            </h3>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--text-secondary)",
+                lineHeight: 1.7,
+                marginBottom: 20,
+                marginTop: 0,
+              }}
+            >
+              Agents share a task queue that fills each step with incoming tasks of different types. Every agent chooses which task type to work on and how much effort to apply. Tasks are completed based on pooled collective effort — no agent can succeed alone. Agents cannot communicate directly; coordination must emerge from learned behavior. The environment supports configurable task difficulty, specialization mechanics, arrival rate variance, and effort capacity. Free-rider dynamics emerge naturally — idling is not prohibited, but its cost falls on the entire group.
+            </p>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                marginBottom: 8,
+              }}
+            >
+              Core mechanics
+            </div>
+            {[
+              "2 action components: task type selection + effort amount",
+              "3-component reward: group completion + individual effort + specialization efficiency",
+              "Specialization mechanic: repeated work on same type builds efficiency bonus",
+              "Termination: max steps, system collapse (sustained backlog), perfect clearance",
+              "Core question: how do agents learn to coordinate effort without communication?",
             ].map((m) => (
               <div
                 key={m}

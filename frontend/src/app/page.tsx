@@ -29,7 +29,7 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
   const [stats, setStats] = useState<Stats>({
     totalRuns: "—",
     leagueMembers: "—",
-    environments: "2",
+    environments: "3",
     reports: "—",
   });
   const [failCount, setFailCount] = useState(0);
@@ -548,7 +548,7 @@ export default function HomePage() {
                 step: "01",
                 title: "Configure",
                 description:
-                  "Pick a simulation template — Resource Sharing or Head-to-Head. Set the number of agents, episode length, seed, and behavioral parameters. Save your config to reuse it across runs.",
+                  "Pick a simulation template — Resource Sharing, Head-to-Head, or Cooperative Task Arena. Set the number of agents, episode length, seed, and behavioral parameters. Save your config to reuse it across runs.",
               },
               {
                 step: "02",
@@ -776,6 +776,12 @@ export default function HomePage() {
                 tag: "League Evolution",
                 tagColor: "#8b5cf6",
               },
+              {
+                q: "How do agents learn to coordinate without communication?",
+                desc: "In the Cooperative Task Arena, agents share a task queue and must collectively prevent system collapse. Watch how specialization, division of labor, and free-rider dynamics emerge — without any direct communication between agents.",
+                tag: "Cooperative Task Arena",
+                tagColor: "#22d3ee",
+              },
             ].map((item) => (
               <div
                 key={item.q}
@@ -879,6 +885,10 @@ export default function HomePage() {
                 <QuickStartButton
                   href="/simulate/head-to-head"
                   label="Head-to-Head Strategy"
+                />
+                <QuickStartButton
+                  href="/simulate/cooperative"
+                  label="Cooperative Task Arena"
                 />
               </div>
               <Link
