@@ -14,13 +14,9 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-import torch
-
 from simulation.config.cooperative_defaults import default_cooperative_config
 from simulation.core.seeding import derive_seed
 from simulation.league.cooperative_registry import CooperativeLeagueRegistry
-from simulation.training.ppo_shared import SharedPolicyNetwork
 
 START_RATING = 1000.0
 K_FACTOR = 32.0
@@ -56,46 +52,43 @@ def elo_update(
 def _eval_completion_ratio(
     member_dir: Path,
     seed: int,
+    max_steps: int = 200,
 ) -> float:
     """Run one cooperative episode with the member policy and return completion_ratio.
 
-    Uses a small default config for speed.
+    Uses CooperativeEnvironment directly (no PettingZoo adapter) for reliable
+    episode termination — mirrors the ``while not env.is_done()`` pattern in
+    simulation/league/ratings.py.  A hard ``step < max_steps`` guard guarantees
+    finite runtime even if the environment's own termination signal is delayed.
     """
-    from simulation.adapters.cooperative_pettingzoo import CooperativePettingZooParallelEnv
+    from simulation.agents.cooperative_baselines import CooperativePPOAgent
+    from simulation.envs.cooperative.env import CooperativeEnvironment
 
     config = default_cooperative_config(seed=seed)
-    # Smaller episode for speed during rating computation
-    config.population.max_steps = 50
+    config.population.max_steps = max_steps
     config.population.num_agents = 3
 
-    # Load policy
-    meta = json.loads((member_dir / "metadata.json").read_text(encoding="utf-8"))
-    obs_dim = meta["obs_dim"]
-    num_action_types = meta.get("num_action_types", 4)
+    env = CooperativeEnvironment(config)
+    obs = env.reset(seed=seed)
 
-    net = SharedPolicyNetwork(obs_dim, num_action_types)
-    net.load_state_dict(torch.load(member_dir / "policy.pt", weights_only=True))
-    net.eval()
+    agent_ids = list(obs.keys())
+    agents: dict[str, CooperativePPOAgent] = {}
+    for i, aid in enumerate(agent_ids):
+        a = CooperativePPOAgent(agent_dir=member_dir)
+        a.reset(aid, derive_seed(seed, i + 100))
+        agents[aid] = a
 
-    env = CooperativePettingZooParallelEnv(config)
-    observations, _ = env.reset(seed=seed)
-
-    while env.agents:
+    step = 0
+    while not env.is_done() and step < max_steps:
+        active = env.active_agents()
         actions: dict[str, Any] = {}
-        for agent_id in env.agents:
-            obs_arr = observations[agent_id]
-            obs_t = torch.from_numpy(obs_arr).unsqueeze(0)
-            with torch.no_grad():
-                logits, _, _, _ = net(obs_t)
-            at = int(logits.argmax(dim=-1).item())
-            actions[agent_id] = {
-                "task_type": at,
-                "effort_amount": np.array([0.8], dtype=np.float32),
-            }
-        observations, _, _, _, _ = env.step(actions)
+        for aid in active:
+            actions[aid] = agents[aid].act(obs.get(aid, {}))
+        results = env.step(actions)
+        obs = {aid: sr.observation for aid, sr in results.items()}
+        step += 1
 
-    # Extract completion_ratio from final environment state
-    state = env._env._state
+    state = env._state
     if state is not None:
         total_completed = sum(state.tasks_completed_total)
         total_work = total_completed + state.backlog_level
@@ -107,6 +100,10 @@ def _eval_completion_ratio(
 # Compute ratings
 # ------------------------------------------------------------------
 
+_MAX_MEMBERS = 10
+_MAX_MATCHES = 3
+
+
 def compute_cooperative_ratings(
     registry: CooperativeLeagueRegistry,
     num_matches: int = 10,
@@ -117,11 +114,25 @@ def compute_cooperative_ratings(
     Each pair of members is evaluated independently; the member with
     the higher mean_completion_ratio wins the match.
 
+    Hard limits: evaluates only the 10 most recent members, and runs at
+    most 3 matches per pair, to keep runtime bounded.
+
     Returns a dict mapping ``member_id`` -> ``rating``.
     """
     members = registry.list_members()
     if not members:
         return {}
+
+    # Cap to the _MAX_MEMBERS most recent members (by created_at, falling back to id).
+    members_sorted = sorted(
+        members,
+        key=lambda m: (m.get("created_at") or "", m["member_id"]),
+        reverse=True,
+    )
+    members = members_sorted[:_MAX_MEMBERS]
+
+    # Cap matches per pair.
+    num_matches = min(num_matches, _MAX_MATCHES)
 
     member_ids = [m["member_id"] for m in members]
     ratings: dict[str, float] = {mid: START_RATING for mid in member_ids}

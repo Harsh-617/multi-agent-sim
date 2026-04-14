@@ -19,7 +19,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from pydantic import BaseModel, Field
 
 from simulation.agents.cooperative_baselines import (
@@ -181,6 +181,42 @@ def _coop_evolution_clusters_and_labels(
 # ------------------------------------------------------------------
 # Members
 # ------------------------------------------------------------------
+
+
+class RecomputeCooperativeRatingsRequest(BaseModel):
+    num_matches: int = Field(default=10, ge=1, le=100)
+    seed: int = Field(default=42)
+
+
+def _bg_recompute_cooperative_ratings(num_matches: int, seed: int) -> None:
+    """Run cooperative rating recomputation in a background thread."""
+    ratings = compute_cooperative_ratings(
+        _registry,
+        num_matches=num_matches,
+        seed=seed,
+    )
+    save_cooperative_ratings(RATINGS_PATH, ratings)
+
+
+@router.post("/ratings/recompute")
+async def recompute_cooperative_ratings(
+    background_tasks: BackgroundTasks,
+    req: RecomputeCooperativeRatingsRequest = Body(default=RecomputeCooperativeRatingsRequest()),
+) -> dict:
+    """Start Elo rating recomputation for cooperative league members in the background.
+
+    Returns immediately with ``{"status": "started"}``; the computation runs
+    in a FastAPI background task so other API requests are not blocked.
+    """
+    members = _registry.list_members()
+    if len(members) < 2:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ratings require at least 2 league members; found {len(members)}.",
+        )
+
+    background_tasks.add_task(_bg_recompute_cooperative_ratings, req.num_matches, req.seed)
+    return {"status": "started"}
 
 
 @router.get("/members")

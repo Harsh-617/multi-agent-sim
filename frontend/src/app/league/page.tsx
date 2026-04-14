@@ -52,6 +52,7 @@ import {
   getCooperativeRobustnessStatus,
   startCooperativePipeline,
   getCooperativePipelineStatus,
+  recomputeCooperativeLeagueRatings,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
@@ -513,6 +514,8 @@ export default function LeaguePage() {
   // Recompute feedback state (per archetype so only one message shows)
   const [rsRecomputeStatus, setRsRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [hhRecomputeStatus, setHhRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [coopRecomputing, setCoopRecomputing] = useState(false);
+  const [coopRecomputeStatus, setCoopRecomputeStatus] = useState<"idle" | "running" | "success" | "error">("idle");
 
   // --- Pipeline state (per archetype) ---
   const [rsPipelineId, setRsPipelineId] = useState<string | null>(null);
@@ -842,6 +845,27 @@ export default function LeaguePage() {
     }
   }
 
+  async function handleCoopRecompute() {
+    setCoopRecomputing(true);
+    setCoopError(null);
+    setCoopRecomputeStatus("running");
+    try {
+      await recomputeCooperativeLeagueRatings();
+      // Endpoint returns immediately; wait 5 s for background task to finish
+      // then re-fetch members with updated ratings.
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const updated = await getCooperativeLeagueMembers();
+      setCoopMembers(updated);
+      setCoopRecomputeStatus("success");
+      setTimeout(() => setCoopRecomputeStatus("idle"), 3000);
+    } catch (e) {
+      setCoopError(String(e));
+      setCoopRecomputeStatus("error");
+    } finally {
+      setCoopRecomputing(false);
+    }
+  }
+
   async function handleCoopBenchmark() {
     if (!coopBenchConfigId) {
       setCoopError("Select a config first.");
@@ -1059,7 +1083,7 @@ export default function LeaguePage() {
   const isCoop = archetype === "cooperative";
   const loading = isCoop ? coopLoading : (isRS ? rsLoading : hhLoading);
   const error = isCoop ? coopError : (isRS ? rsError : hhError);
-  const recomputing = isRS ? rsRecomputing : hhRecomputing;
+  const recomputing = isCoop ? coopRecomputing : (isRS ? rsRecomputing : hhRecomputing);
   const members = isCoop ? coopMembers : (isRS ? rsMembers : hhMembers);
 
   // Sorted members for ratings tab
@@ -1298,11 +1322,11 @@ export default function LeaguePage() {
           Cooperative
         </button>
 
-        {/* Recompute Ratings button — only for RS and HH */}
-        {!isCoop && (
+        {/* Recompute Ratings button — RS, HH always; Coop only on ratings tab */}
+        {(!isCoop || tab === "ratings") && (
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             <button
-              onClick={isRS ? handleRsRecompute : handleHhRecompute}
+              onClick={isCoop ? handleCoopRecompute : (isRS ? handleRsRecompute : handleHhRecompute)}
               disabled={recomputing || members.length === 0}
               style={{
                 padding: "6px 12px",
@@ -1318,13 +1342,13 @@ export default function LeaguePage() {
             >
               {recomputing ? "Recomputing..." : "Recompute Ratings"}
             </button>
-            {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "running" && (
+            {(isCoop ? coopRecomputeStatus : (isRS ? rsRecomputeStatus : hhRecomputeStatus)) === "running" && (
               <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Recomputing...</span>
             )}
-            {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "success" && (
+            {(isCoop ? coopRecomputeStatus : (isRS ? rsRecomputeStatus : hhRecomputeStatus)) === "success" && (
               <span style={{ fontSize: 12, color: "var(--accent)" }}>&#10003; Ratings updated</span>
             )}
-            {(isRS ? rsRecomputeStatus : hhRecomputeStatus) === "error" && (
+            {(isCoop ? coopRecomputeStatus : (isRS ? rsRecomputeStatus : hhRecomputeStatus)) === "error" && (
               <span style={{ fontSize: 12, color: "#f87171" }}>Failed to recompute</span>
             )}
           </div>

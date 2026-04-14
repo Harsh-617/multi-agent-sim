@@ -1094,6 +1094,17 @@ export function getCooperativeLeagueEvolution(): Promise<CooperativeEvolutionRes
   return json(`${BASE}/cooperative/league/evolution`);
 }
 
+export function recomputeCooperativeLeagueRatings(
+  numMatches: number = 10,
+  seed: number = 42,
+): Promise<{ status: string }> {
+  return json(`${BASE}/cooperative/league/ratings/recompute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ num_matches: numMatches, seed }),
+  });
+}
+
 export function runCooperativeChampionRobustness(
   payload: CooperativeRobustnessRequest,
 ): Promise<CooperativeRobustnessResponse> {
