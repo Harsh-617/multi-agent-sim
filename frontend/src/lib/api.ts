@@ -1112,6 +1112,31 @@ export function getCooperativeRobustnessStatus(
   );
 }
 
+export interface CooperativeBenchmarkResult {
+  policy: string;
+  mean_completion_ratio: number;
+  mean_return: number;
+  mean_episode_length: number;
+  [key: string]: unknown;
+}
+
+export interface CooperativeBenchmarkResponse {
+  champion: CooperativeChampionInfo;
+  results: CooperativeBenchmarkResult[];
+}
+
+export function runCooperativeChampionBenchmark(
+  configId: string,
+  episodes: number,
+  seed = 42,
+): Promise<CooperativeBenchmarkResponse> {
+  return json(`${BASE}/cooperative/league/champion/benchmark`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config_id: configId, episodes, seed }),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Cooperative Pipeline
 // ---------------------------------------------------------------------------

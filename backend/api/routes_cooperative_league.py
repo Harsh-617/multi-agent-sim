@@ -22,6 +22,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from simulation.agents.cooperative_baselines import (
+    CooperativePPOAgent,
+    create_cooperative_agent,
+)
 from simulation.analysis.cooperative_clustering import (
     cluster_cooperative_agents,
     label_cooperative_clusters,
@@ -29,6 +33,8 @@ from simulation.analysis.cooperative_clustering import (
 )
 from simulation.config.cooperative_defaults import default_cooperative_config
 from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
+from simulation.core.seeding import derive_seed
+from simulation.envs.cooperative.env import CooperativeEnvironment
 from simulation.evaluation.cooperative_robustness import run_cooperative_robustness
 from simulation.evaluation.cooperative_sweeps import build_cooperative_sweeps
 from simulation.league.cooperative_ratings import (
@@ -304,6 +310,151 @@ async def get_coop_evolution() -> dict:
         })
 
     return {"members": result_members, "champion_history": champion_history}
+
+
+# ------------------------------------------------------------------
+# Champion vs Baseline benchmark
+# ------------------------------------------------------------------
+
+_COOP_BASELINE_POLICIES = [
+    "random",
+    "always_work",
+    "always_idle",
+    "specialist",
+    "balancer",
+]
+
+
+class CoopChampionBenchmarkRequest(BaseModel):
+    config_id: str = Field(default="default")
+    episodes: int = Field(default=10, ge=1, le=100)
+    seed: int = Field(default=42)
+
+
+def _run_coop_benchmark_episode(
+    config: CooperativeEnvironmentConfig,
+    policy_name: str,
+    seed: int,
+    agent_dir: Path | None = None,
+) -> dict:
+    """Run one cooperative episode and return summary stats."""
+    env = CooperativeEnvironment(config)
+    obs = env.reset(seed=seed)
+    agent_ids = env.active_agents()
+    num_task_types = config.population.num_task_types
+
+    agents: dict[str, Any] = {}
+    for i, aid in enumerate(agent_ids):
+        if policy_name == "cooperative_champion" and agent_dir is not None:
+            a: Any = CooperativePPOAgent(agent_dir=agent_dir)
+        else:
+            a = create_cooperative_agent(policy_name, num_task_types=num_task_types)
+        a.reset(aid, derive_seed(seed, i))
+        agents[aid] = a
+
+    total_reward = 0.0
+    step = 0
+
+    while not env.is_done():
+        active = env.active_agents()
+        actions: dict[str, Any] = {}
+        for aid in active:
+            actions[aid] = agents[aid].act(obs.get(aid, {}))
+
+        results = env.step(actions)
+        obs = {aid: sr.observation for aid, sr in results.items()}
+        total_reward += sum(sr.reward for sr in results.values())
+        step += 1
+
+    state = env._state
+    total_completed = float(sum(state.tasks_completed_total)) if state is not None else 0.0
+    backlog = float(state.backlog_level) if state is not None else 0.0
+    completion_ratio = total_completed / max(total_completed + backlog, 1.0)
+    mean_return = total_reward / max(len(agent_ids), 1)
+
+    return {
+        "completion_ratio": completion_ratio,
+        "mean_return": mean_return,
+        "episode_length": step,
+    }
+
+
+def _benchmark_coop_policy(
+    config: CooperativeEnvironmentConfig,
+    policy_name: str,
+    episodes: int,
+    base_seed: int,
+    agent_dir: Path | None = None,
+) -> dict:
+    """Run *episodes* cooperative episodes for a single policy and aggregate."""
+    completion_ratios: list[float] = []
+    returns: list[float] = []
+    lengths: list[int] = []
+
+    for ep in range(episodes):
+        ep_seed = derive_seed(base_seed, ep)
+        result = _run_coop_benchmark_episode(
+            config, policy_name, ep_seed, agent_dir=agent_dir
+        )
+        completion_ratios.append(result["completion_ratio"])
+        returns.append(result["mean_return"])
+        lengths.append(result["episode_length"])
+
+    n = max(len(completion_ratios), 1)
+    return {
+        "mean_completion_ratio": round(sum(completion_ratios) / n, 4),
+        "mean_return": round(sum(returns) / n, 4),
+        "mean_episode_length": round(sum(lengths) / n, 2),
+    }
+
+
+@router.post("/champion/benchmark")
+async def coop_champion_benchmark(req: CoopChampionBenchmarkRequest) -> dict:
+    """Benchmark the cooperative champion against baseline policies."""
+    if req.config_id == "default":
+        config = default_cooperative_config()
+    else:
+        config_path = CONFIGS_DIR / f"{req.config_id}.json"
+        if not config_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Config '{req.config_id}' not found."
+            )
+        config = CooperativeEnvironmentConfig.model_validate_json(
+            config_path.read_text(encoding="utf-8")
+        )
+
+    members = _registry.list_members()
+    if not members:
+        raise HTTPException(status_code=404, detail="No cooperative league members exist.")
+    ratings = _ratings_map()
+    champ = _find_champion(members, ratings)
+    if champ is None:
+        raise HTTPException(status_code=404, detail="No cooperative league members exist.")
+
+    results: list[dict] = []
+
+    # Champion
+    champ_dir = _registry.load_member(champ["member_id"])
+    champ_result = await asyncio.to_thread(
+        _benchmark_coop_policy,
+        config,
+        "cooperative_champion",
+        req.episodes,
+        req.seed,
+        champ_dir,
+    )
+    champ_result["policy"] = "cooperative_champion"
+    results.append(champ_result)
+
+    # Baselines
+    for policy in _COOP_BASELINE_POLICIES:
+        res = await asyncio.to_thread(
+            _benchmark_coop_policy, config, policy, req.episodes, req.seed
+        )
+        res["policy"] = policy
+        results.append(res)
+
+    return {"champion": champ, "results": results}
 
 
 # ------------------------------------------------------------------

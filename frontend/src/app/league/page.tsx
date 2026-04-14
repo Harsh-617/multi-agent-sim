@@ -42,11 +42,13 @@ import {
   CooperativeEvolutionResponse,
   CooperativeChampionInfo,
   CooperativeRobustnessHeatmapResponse,
+  CooperativeBenchmarkResponse,
   getCooperativeLeagueMembers,
   getCooperativeLeagueLineage,
   getCooperativeLeagueEvolution,
   getCooperativeChampion,
   runCooperativeChampionRobustness,
+  runCooperativeChampionBenchmark,
   getCooperativeRobustnessStatus,
   startCooperativePipeline,
   getCooperativePipelineStatus,
@@ -538,6 +540,12 @@ export default function LeaguePage() {
   const [coopRobSeeds, setCoopRobSeeds] = useState(3);
   const [coopRobEpisodesPerSeed, setCoopRobEpisodesPerSeed] = useState(2);
   const [coopRobSeed, setCoopRobSeed] = useState(42);
+  const [coopConfigs, setCoopConfigs] = useState<ConfigListItem[]>([]);
+  const [coopBenchConfigId, setCoopBenchConfigId] = useState("default");
+  const [coopBenchEpisodes, setCoopBenchEpisodes] = useState(5);
+  const [coopBenchRunning, setCoopBenchRunning] = useState(false);
+  const [coopBenchData, setCoopBenchData] = useState<CooperativeBenchmarkResponse | null>(null);
+  const [coopRobConfigId, setCoopRobConfigId] = useState("default");
 
   // --- Pipeline config state (per archetype) ---
   const [rsPipelineConfig, setRsPipelineConfig] = useState<PipelineConfig>({
@@ -616,16 +624,22 @@ export default function LeaguePage() {
     setCoopLoading(true);
     setCoopError(null);
     try {
-      const [m, lin, evo, champ] = await Promise.all([
+      const [m, lin, evo, champ, configs] = await Promise.all([
         getCooperativeLeagueMembers(),
         getCooperativeLeagueLineage(),
         getCooperativeLeagueEvolution(),
         getCooperativeChampion().catch(() => null),
+        listConfigs(),
       ]);
       setCoopMembers(m);
       setCoopLineage(lin.members);
       setCoopEvolution(evo);
       setCoopChampion(champ);
+      setCoopConfigs(configs);
+      if (configs.length > 0) {
+        setCoopBenchConfigId(configs[0].config_id);
+        setCoopRobConfigId(configs[0].config_id);
+      }
     } catch (e) {
       setCoopError(String(e));
     } finally {
@@ -794,6 +808,27 @@ export default function LeaguePage() {
     }
   }
 
+  async function handleCoopBenchmark() {
+    if (!coopBenchConfigId) {
+      setCoopError("Select a config first.");
+      return;
+    }
+    setCoopBenchRunning(true);
+    setCoopError(null);
+    setCoopBenchData(null);
+    try {
+      const resp = await runCooperativeChampionBenchmark(
+        coopBenchConfigId,
+        coopBenchEpisodes,
+      );
+      setCoopBenchData(resp);
+    } catch (e) {
+      setCoopError(String(e));
+    } finally {
+      setCoopBenchRunning(false);
+    }
+  }
+
   async function handleCoopRobustness() {
     setCoopRobRunning(true);
     setCoopError(null);
@@ -803,6 +838,7 @@ export default function LeaguePage() {
     setCoopRobData(null);
     try {
       const resp = await runCooperativeChampionRobustness({
+        config_id: coopRobConfigId,
         seeds: coopRobSeeds,
         episodes_per_seed: coopRobEpisodesPerSeed,
         seed: coopRobSeed,
@@ -1863,15 +1899,48 @@ export default function LeaguePage() {
                     </p>
                   )}
 
-                  {/* Benchmark results */}
+                  {/* Benchmark section */}
                   <div>
                     <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Champion Benchmark</h3>
-                    <CooperativeChampionBenchmark
-                      champion={coopChampion && coopChampion.member_id
-                        ? { member_id: coopChampion.member_id, rating: coopChampion.rating ?? 0 }
-                        : null}
-                      results={[]}
-                    />
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Config</label>
+                        <select
+                          value={coopBenchConfigId}
+                          onChange={(e) => setCoopBenchConfigId(e.target.value)}
+                          style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                        >
+                          {coopConfigs.map((c) => (
+                            <option key={c.config_id} value={c.config_id}>{c.config_id}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Episodes</label>
+                        <input
+                          type="number" min={1} max={50} value={coopBenchEpisodes}
+                          onChange={(e) => setCoopBenchEpisodes(Number(e.target.value))}
+                          style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, width: 64, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                        />
+                      </div>
+                      <button
+                        onClick={handleCoopBenchmark}
+                        disabled={coopBenchRunning || coopConfigs.length === 0 || coopMembers.length === 0}
+                        style={{ padding: "4px 12px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: (coopBenchRunning || coopConfigs.length === 0 || coopMembers.length === 0) ? 0.5 : 1 }}
+                      >
+                        {coopBenchRunning ? "Running..." : "Run Champion Benchmark"}
+                      </button>
+                    </div>
+                    {coopBenchData && (
+                      <div style={{ marginTop: 16 }}>
+                        <CooperativeChampionBenchmark
+                          champion={coopBenchData.champion.member_id
+                            ? { member_id: coopBenchData.champion.member_id, rating: coopBenchData.champion.rating ?? 0 }
+                            : null}
+                          results={coopBenchData.results}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Robustness */}
@@ -1884,6 +1953,18 @@ export default function LeaguePage() {
                     ) : (
                       <>
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12 }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Config</label>
+                            <select
+                              value={coopRobConfigId}
+                              onChange={(e) => setCoopRobConfigId(e.target.value)}
+                              style={{ border: "1px solid var(--bg-border)", borderRadius: 4, padding: "4px 8px", fontSize: 13, background: "var(--bg-base)", color: "var(--text-primary)" }}
+                            >
+                              {coopConfigs.map((c) => (
+                                <option key={c.config_id} value={c.config_id}>{c.config_id}</option>
+                              ))}
+                            </select>
+                          </div>
                           <div>
                             <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Seeds</label>
                             <input
