@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from simulation.config.cooperative_schema import CooperativeEnvironmentConfig
 from simulation.config.defaults import default_config
 from simulation.config.schema import MixedEnvironmentConfig
 from simulation.pipeline.cooperative_pipeline_run import run_cooperative_pipeline  # noqa: F401
@@ -172,9 +171,11 @@ def run_pipeline(
         config_dict = json.loads(raw)
         env_type = config_dict.get("identity", {}).get("environment_type", "mixed")
         if env_type == "cooperative":
-            config = CooperativeEnvironmentConfig.model_validate(config_dict)
-        else:
-            config = MixedEnvironmentConfig.model_validate_json(raw)
+            raise ValueError(
+                f"Config '{config_id}' is a cooperative config. "
+                "Use run_cooperative_pipeline() instead of run_pipeline()."
+            )
+        config = MixedEnvironmentConfig.model_validate_json(raw)
 
     base_seed = config.identity.seed
     eval_seeds = [base_seed + i for i in range(seeds)]

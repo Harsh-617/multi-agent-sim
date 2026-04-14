@@ -92,7 +92,8 @@ def build_cooperative_sweeps() -> list[CoopSweepSpec]:
         ))
 
     # D) Specialization scale (2 variants)
-    for spec_scale, label in ((0.1, "low_spec"), (0.6, "high_spec")):
+    # Note: 0.5 is the schema maximum (le=0.5); 0.6 would raise ValidationError.
+    for spec_scale, label in ((0.1, "low_spec"), (0.5, "high_spec")):
         sweeps.append(CoopSweepSpec(
             name=f"spec_{label}",
             description=f"Specialization scale = {spec_scale}",

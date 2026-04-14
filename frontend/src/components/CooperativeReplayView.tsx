@@ -65,6 +65,10 @@ export default function CooperativeReplayView({ runId }: Props) {
         setHistory(frames.flat());
         setLoaded(true);
       },
+      (detail) => {
+        setError(detail);
+        setLoaded(true);
+      },
     );
     esRef.current = es;
 

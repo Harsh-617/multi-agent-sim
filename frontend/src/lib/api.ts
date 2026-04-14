@@ -959,6 +959,7 @@ export function streamCooperativeReplay(
   runId: string,
   onMessage: (msg: CooperativeWsMessage) => void,
   onDone?: () => void,
+  onError?: (detail: string) => void,
 ): EventSource {
   const es = new EventSource(
     `${BASE}/cooperative/runs/${encodeURIComponent(runId)}/replay`,
@@ -980,7 +981,11 @@ export function streamCooperativeReplay(
   };
   es.onerror = () => {
     es.close();
-    onDone?.();
+    if (onError) {
+      onError(`Could not load replay for run '${runId}' — run may not exist or has no recorded metrics.`);
+    } else {
+      onDone?.();
+    }
   };
   return es;
 }

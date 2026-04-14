@@ -125,3 +125,43 @@ The following deployment-readiness issues were fixed in PR #10:
 | F10 | Minor | frontend/src/components/RobustScatter.tsx | Math.min/max called on empty array produced broken SVG scales — added no-data placeholder | Fixed |
 | F11 | Minor | backend/runner/run_manager.py | Unbounded asyncio.Queue for WebSocket subscribers — slow clients leaked memory at ~50ms broadcast rate | Fixed |
 | F12 | Minor | backend/api/routes_config.py | Malformed config files silently skipped with no logging — added logger.warning so server logs show the cause | Fixed |
+
+---
+
+## Cooperative Archetype Pre-Deployment Audit
+
+Audit conducted 2026-04-15 against all files added or modified for the Cooperative archetype.
+
+**Result: 5 issues found (2 Critical, 3 Major). All fixed. 500 tests pass. 0 TypeScript errors.**
+
+### Critical
+
+| ID | Severity | File(s) | Description | Status |
+|----|----------|---------|-------------|--------|
+| CP1 | Critical | simulation/evaluation/cooperative_sweeps.py | `spec_high` sweep variant sets `specialization_scale=0.6`, which violates the schema field constraint `le=0.5`. `apply_coop_sweep` calls `model_copy(update={"specialization_scale": 0.6})`, Pydantic raises `ValidationError`, and every robustness pipeline run crashes when it reaches this sweep (sweep 14 of 20). Fixed: changed `0.6` → `0.5` (the schema maximum). | Fixed |
+| CP2 | Critical | backend/api/routes_cooperative_pipeline.py | `run_cooperative_pipeline()` was called with only request-level kwargs (config_id, seed, timesteps…) — none of the path overrides (`ppo_agent_dir`, `pipelines_dir`, `configs_dir`, `reports_dir`) were passed. The function fell back to hardcoded relative `Path("storage/…")` defaults, reproducing the old M3 CWD-dependent path bug for the cooperative pipeline. Fixed: added four STORAGE_ROOT-derived path kwargs to the kwargs dict passed to `run_cooperative_pipeline`. | Fixed |
+
+### Major
+
+| ID | Severity | File(s) | Description | Status |
+|----|----------|---------|-------------|--------|
+| CP3 | Major | simulation/pipeline/pipeline_run.py | When a saved config has `environment_type == "cooperative"`, `run_pipeline()` loaded it as a `CooperativeEnvironmentConfig` and then passed it directly to `ppo_shared.train` (the Mixed-archetype trainer). That trainer instantiates `MixedPettingZooParallelEnv`, which would crash with a confusing AttributeError deep in the adapter. Any direct call to `run_pipeline()` with a cooperative config_id would fail. Fixed: replaced the `CooperativeEnvironmentConfig.model_validate` branch with an early `ValueError` that directs callers to `run_cooperative_pipeline()` instead. Removed now-unused `CooperativeEnvironmentConfig` import. | Fixed |
+| CP4 | Major | frontend/src/components/CooperativeReplayView.tsx, frontend/src/lib/api.ts | `streamCooperativeReplay`'s `onerror` handler called `onDone()` — the same callback as a successful close — so a 404 (run not found) or dropped SSE connection was indistinguishable from a clean finish. The component's `error` state was declared and displayed but never populated. User saw blank charts with no explanation. Fixed: added `onError?: (detail: string) => void` parameter to `streamCooperativeReplay`; `onerror` now calls `onError` with a descriptive message instead of `onDone`. The component passes an error callback that sets `error` state and marks `loaded=true`. | Fixed |
+| CP5 | Major | backend/schemas/api_models.py | `EnvironmentConfig` union type only listed `MixedEnvironmentConfig \| CompetitiveEnvironmentConfig`. The comment notes it is for documentation purposes, but omitting the cooperative type means any tooling that inspects this union (API schema generators, type stubs) gives an incomplete picture of accepted configs. Fixed: added `CooperativeEnvironmentConfig` to the union. | Fixed |
+
+### Minor (not fixed)
+
+| ID | Severity | File(s) | Description |
+|----|----------|---------|-------------|
+| CP-L1 | Minor | simulation/evaluation/cooperative_eval_runner.py, simulation/evaluation/cooperative_robustness.py | Module-level `_REPORTS_ROOT = Path("storage/reports")` is a relative path. Safe in practice because every caller passes an explicit `report_root=` argument, but the default is misleading and would silently fail if these functions were ever called standalone from a non-root directory. |
+| CP-L2 | Minor | backend/api/routes_cooperative_league.py | `GET /api/cooperative/league/champion` returns HTTP 404 when the league is empty. The frontend handles this gracefully with `.catch(() => null)`, but the endpoint semantics differ from the Mixed archetype's league endpoint. Should be normalized to return an empty response (`{}` or `null`) in a future cleanup. |
+| CP-L3 | Minor | simulation/pipeline/cooperative_pipeline_run.py | Module-level `_AGENTS_DIR`, `_COOPERATIVE_PPO_DIR`, `_PIPELINES_DIR`, `_CONFIGS_DIR`, `_REPORTS_DIR` are all relative paths. Now unreachable through the API (C2 fix ensures callers always supply absolute overrides), but standalone script invocations from non-root directories would still fail. |
+
+### Scope check — existing archetypes not modified
+
+Verified no Mixed or Competitive environment files, adapters, or metrics collectors were touched:
+- `simulation/envs/mixed/` — unchanged
+- `simulation/envs/competitive/` — unchanged
+- `simulation/adapters/pettingzoo.py` — unchanged
+- `simulation/adapters/competitive_pettingzoo.py` — unchanged
+- `simulation/metrics/` (mixed and competitive collectors) — unchanged

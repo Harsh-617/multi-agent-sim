@@ -131,6 +131,12 @@ async def start_coop_pipeline(req: CoopPipelineRunRequest) -> dict:
         "max_league_members": req.max_league_members,
         "num_matches": req.num_matches,
         "limit_sweeps": req.limit_sweeps,
+        # Pass absolute STORAGE_ROOT-derived paths so the pipeline works
+        # regardless of the CWD when uvicorn is started (mirrors old M3 fix).
+        "ppo_agent_dir": STORAGE_ROOT / "agents/cooperative/ppo_shared",
+        "pipelines_dir": STORAGE_ROOT / "pipelines",
+        "configs_dir": STORAGE_ROOT / "configs",
+        "reports_dir": STORAGE_ROOT / "reports",
     }
 
     task = asyncio.create_task(
