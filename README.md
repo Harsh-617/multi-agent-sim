@@ -8,13 +8,15 @@ Built as a solo research project. The full pipeline runs end-to-end from a singl
 
 ## What It Does
 
-The platform provides two configurable simulation environments:
+The platform provides three configurable simulation environments:
 
 **Resource Sharing Arena** — agents share a common resource pool and choose every step whether to cooperate, extract, defend, or act conditionally. The environment is governed by 7 configurable behavioral layers including memory depth, reputation tracking, information asymmetry, and observation noise. The core research question: under what conditions does sustained cooperation emerge as the rational strategy?
 
 **Head-to-Head Strategy** — agents compete directly for resources in a zero-sum environment, choosing to build, attack, defend, or gamble each step. Agents below the elimination threshold are removed from the episode. Terminal bonuses reward relative ranking. The core research question: which competitive strategies survive elimination pressure and dominate across generations?
 
-Both environments support deterministic seeding — the same config and seed always produce the same trajectory.
+**Cooperative Task Arena** — agents share a task queue with multiple task types and choose each step how to allocate effort. Specialization, free-rider dynamics, and backlog pressure create a rich cooperative dilemma. The core research question: under what conditions does emergent specialization improve group efficiency without enabling free-riding?
+
+All environments support deterministic seeding — the same config and seed always produce the same trajectory.
 
 ---
 
@@ -111,6 +113,10 @@ multi-agent-sim/
 │   │   ├── routes_reports.py       # Report listing and retrieval
 │   │   ├── routes_competitive_league.py   # Competitive league endpoints
 │   │   ├── routes_competitive_reports.py  # Competitive report endpoints
+│   │   ├── routes_cooperative.py          # Cooperative run endpoints
+│   │   ├── routes_cooperative_league.py   # Cooperative league endpoints
+│   │   ├── routes_cooperative_pipeline.py # Cooperative pipeline endpoints
+│   │   ├── routes_cooperative_reports.py  # Cooperative report endpoints
 │   │   └── ws_metrics.py           # WebSocket live metrics streaming
 │   ├── pipeline/
 │   │   └── pipeline_manager.py     # Async pipeline orchestration
@@ -127,7 +133,9 @@ multi-agent-sim/
 │   │   ├── schema.py               # Resource Sharing config (Pydantic)
 │   │   ├── defaults.py             # Default config values
 │   │   ├── competitive_schema.py   # Head-to-Head config (Pydantic)
-│   │   └── competitive_defaults.py # Competitive default values
+│   │   ├── competitive_defaults.py # Competitive default values
+│   │   ├── cooperative_schema.py   # Cooperative Task Arena config (Pydantic)
+│   │   └── cooperative_defaults.py # Cooperative default values
 │   ├── core/                       # Shared foundations
 │   │   ├── base_env.py             # Base environment class
 │   │   ├── seeding.py              # Deterministic RNG utilities
@@ -140,13 +148,20 @@ multi-agent-sim/
 │   │   │   ├── state.py            # State management
 │   │   │   ├── transition.py       # State transitions
 │   │   │   └── termination.py      # Episode termination logic
-│   │   └── competitive/            # Head-to-Head environment
+│   │   ├── competitive/            # Head-to-Head environment
+│   │   │   ├── env.py              # Main environment class
+│   │   │   ├── actions.py          # Action processing
+│   │   │   ├── rewards.py          # Reward computation
+│   │   │   ├── state.py            # State management
+│   │   │   ├── transition.py       # State transitions
+│   │   │   └── termination.py      # Elimination and episode end
+│   │   └── cooperative/            # Cooperative Task Arena environment
 │   │       ├── env.py              # Main environment class
 │   │       ├── actions.py          # Action processing
 │   │       ├── rewards.py          # Reward computation
 │   │       ├── state.py            # State management
 │   │       ├── transition.py       # State transitions
-│   │       └── termination.py      # Elimination and episode end
+│   │       └── termination.py      # Collapse and episode end
 │   ├── agents/                     # Agent implementations
 │   │   ├── base.py                 # Abstract base agent
 │   │   ├── random_agent.py         # Random baseline
@@ -156,13 +171,18 @@ multi-agent-sim/
 │   │   ├── ppo_shared_agent.py     # PPO shared-policy agent
 │   │   ├── competitive_baselines.py    # Competitive baseline agents
 │   │   ├── competitive_ppo_agent.py    # Competitive PPO agent
+│   │   ├── cooperative_baselines.py    # Cooperative baseline agents
 │   │   └── league_snapshot_agent.py    # Frozen league snapshot agent
 │   ├── adapters/                   # PettingZoo compatibility
-│   │   ├── pettingzoo_mixed.py     # Resource Sharing adapter
-│   │   └── competitive_pettingzoo.py   # Head-to-Head adapter
+│   │   ├── pettingzoo_mixed.py         # Resource Sharing adapter
+│   │   ├── competitive_pettingzoo.py   # Head-to-Head adapter
+│   │   └── cooperative_pettingzoo.py   # Cooperative Task Arena adapter
 │   ├── training/                   # RL training
 │   │   ├── ppo_shared.py           # PPO trainer (Resource Sharing)
 │   │   ├── competitive_ppo.py      # PPO trainer (Head-to-Head)
+│   │   ├── cooperative_train.py    # PPO trainer (Cooperative)
+│   │   ├── cooperative_eval.py     # Cooperative policy evaluation
+│   │   ├── cooperative_league_train.py  # Cooperative league self-play
 │   │   └── eval_policy.py          # Policy evaluation utilities
 │   ├── league/                     # League system
 │   │   ├── registry.py             # League member registry
@@ -170,7 +190,9 @@ multi-agent-sim/
 │   │   ├── sampling.py             # Opponent sampling (Resource Sharing)
 │   │   ├── competitive_sampling.py # Opponent sampling (Head-to-Head)
 │   │   ├── eval_population.py      # Population evaluation (Resource Sharing)
-│   │   └── competitive_eval.py     # Population evaluation (Head-to-Head)
+│   │   ├── competitive_eval.py     # Population evaluation (Head-to-Head)
+│   │   ├── cooperative_registry.py # Cooperative league member registry
+│   │   └── cooperative_ratings.py  # Cooperative Elo rating computation
 │   ├── evaluation/                 # Evaluation and robustness
 │   │   ├── evaluator.py            # Core evaluation runner
 │   │   ├── robustness.py           # 20-variant robustness evaluation
@@ -182,25 +204,33 @@ multi-agent-sim/
 │   │   ├── competitive_robustness.py   # Competitive robustness
 │   │   ├── competitive_sweeps.py       # Competitive sweep generation
 │   │   ├── competitive_policy_set.py   # Competitive policy sets
-│   │   └── competitive_reporting.py    # Competitive report generation
+│   │   ├── competitive_reporting.py    # Competitive report generation
+│   │   ├── cooperative_eval_runner.py  # Cooperative evaluation runner
+│   │   ├── cooperative_robustness.py   # Cooperative robustness
+│   │   └── cooperative_sweeps.py       # Cooperative sweep generation (20 variants)
 │   ├── analysis/                   # Strategy analysis
 │   │   ├── strategy_features.py    # Feature extraction (Resource Sharing)
 │   │   ├── strategy_clustering.py  # K-means clustering
 │   │   ├── strategy_labels.py      # Archetype label assignment
 │   │   ├── competitive_strategy_features.py  # Competitive features
 │   │   ├── competitive_strategy_clustering.py # Competitive clustering
-│   │   └── competitive_strategy_labels.py     # Competitive labels
+│   │   ├── competitive_strategy_labels.py     # Competitive labels
+│   │   └── cooperative_clustering.py          # Cooperative clustering (6-feature vector)
 │   ├── metrics/                    # Metrics collection
 │   │   ├── collector.py            # Resource Sharing metrics
 │   │   ├── definitions.py          # Metric definitions
 │   │   ├── competitive_collector.py    # Competitive metrics
-│   │   └── competitive_definitions.py  # Competitive metric definitions
+│   │   ├── competitive_definitions.py  # Competitive metric definitions
+│   │   ├── cooperative_collector.py    # Cooperative metrics
+│   │   └── cooperative_definitions.py  # Cooperative metric definitions
 │   ├── pipeline/                   # End-to-end pipeline
 │   │   ├── pipeline_run.py         # Resource Sharing pipeline
-│   │   └── competitive_pipeline_run.py # Head-to-Head pipeline
+│   │   ├── competitive_pipeline_run.py # Head-to-Head pipeline
+│   │   └── cooperative_pipeline_run.py # Cooperative Task Arena pipeline
 │   └── runner/                     # Experiment execution
 │       ├── run_logger.py           # JSONL run logging
-│       └── competitive_experiment_runner.py # Competitive runner
+│       ├── competitive_experiment_runner.py # Competitive runner
+│       └── cooperative_experiment_runner.py # Cooperative runner
 │
 ├── frontend/                       # Next.js 14 dashboard
 │   ├── src/
@@ -211,20 +241,29 @@ multi-agent-sim/
 │   │   │   ├── research/           # Research reports
 │   │   │   └── simulate/           # Simulation pages
 │   │   │       ├── resource-sharing/   # Resource Sharing UI
-│   │   │       └── head-to-head/       # Head-to-Head UI
+│   │   │       ├── head-to-head/       # Head-to-Head UI
+│   │   │       └── cooperative/        # Cooperative Task Arena UI
 │   │   ├── components/             # React components
 │   │   │   ├── Nav.tsx             # Navigation bar
-│   │   │   ├── MetricsChart.tsx    # Live metrics chart
+│   │   │   ├── MetricsChart.tsx    # Live metrics chart (Resource Sharing)
 │   │   │   ├── LineageGraph.tsx    # League lineage visualization
 │   │   │   ├── RobustHeatmap.tsx   # Robustness heatmap
 │   │   │   ├── RobustScatter.tsx   # Robustness scatter plot
 │   │   │   ├── LeagueEvolution.tsx # Strategy evolution timeline
+│   │   │   ├── CooperativeMetricsChart.tsx     # Live metrics (Cooperative)
+│   │   │   ├── CooperativeRunSummary.tsx        # Cooperative episode summary
+│   │   │   ├── CooperativeReplayView.tsx        # Cooperative replay charts
+│   │   │   ├── CooperativeLeagueLineage.tsx     # Cooperative lineage graph
+│   │   │   ├── CooperativeChampionBenchmark.tsx # Cooperative champion benchmark
+│   │   │   ├── CooperativeChampionRobustness.tsx # Cooperative robustness form
+│   │   │   ├── CooperativeRobustScatter.tsx     # Cooperative robustness scatter
+│   │   │   ├── CooperativeStrategyGroups.tsx    # Cooperative strategy clusters
 │   │   │   └── ...                 # Additional components
 │   │   └── lib/
 │   │       └── api.ts              # API client utilities
 │   └── package.json
 │
-├── tests/                          # Test suite (266 tests)
+├── tests/                          # Test suite (500 tests)
 │   ├── unit/                       # Unit tests (22 modules)
 │   │   ├── test_mixed_env.py
 │   │   ├── test_competitive_env.py
@@ -245,7 +284,8 @@ multi-agent-sim/
 │   ├── runs/                       # Experiment run data (metrics, events)
 │   ├── agents/                     # Trained policies and league snapshots
 │   │   ├── league/                 # Resource Sharing league members
-│   │   └── competitive_league/     # Head-to-Head league members
+│   │   ├── competitive_league/     # Head-to-Head league members
+│   │   └── cooperative/            # Cooperative Task Arena league members
 │   ├── pipelines/                  # Pipeline execution summaries
 │   └── reports/                    # Generated research reports
 │
@@ -326,6 +366,9 @@ python -m simulation.pipeline.pipeline_run
 
 # Head-to-Head pipeline
 python -m simulation.pipeline.competitive_pipeline_run
+
+# Cooperative Task Arena pipeline
+python -m simulation.pipeline.cooperative_pipeline_run
 ```
 
 Each pipeline runs in sequence: PPO training → league snapshots → Elo rating → robustness evaluation → strategy clustering → report generation.
@@ -396,7 +439,7 @@ flowchart LR
     end
 ```
 
-Both archetypes (Resource Sharing and Head-to-Head) have mirrored API routes. Competitive routes are prefixed with `/api/competitive/` or live under `/api/competitive-league/`.
+All three archetypes (Resource Sharing, Head-to-Head, and Cooperative) have mirrored API routes. Competitive routes are prefixed with `/api/competitive/` and cooperative routes are prefixed with `/api/cooperative/`.
 
 ---
 
@@ -416,7 +459,7 @@ pytest tests/integration/ -v
 pytest tests/ --cov=simulation --cov=backend --cov-report=term-missing
 ```
 
-**266 tests passing.** Zero failures.
+**500 tests passing.** Zero failures.
 
 **Unit coverage (22 modules):** `mixed_env`, `competitive_env`, `config_validation`, `agents`, `ppo_training`, `league_registry`, `league_ratings`, `league_sampling`, `league_selfplay`, `evaluation`, `robustness`, `reporting`, `metrics_collector`, `run_logger`, `pipeline_run`, `strategy_analysis`, PettingZoo adapter, seeding utilities, and more.
 
@@ -448,16 +491,17 @@ This is a **solo research project** under active development.
 **Fully implemented and tested:**
 - Resource Sharing environment (all 7 behavioral layers)
 - Head-to-Head competitive environment
+- Cooperative Task Arena environment (task queue, specialization mechanics, free-rider dynamics)
 - PPO shared-policy training with league self-play
 - Elo rating system and champion tracking
 - 20-variant robustness evaluation
 - K-means strategy clustering with 11 labeled archetypes
-- Full pipeline automation (one command, both archetypes)
+- Full pipeline automation (one command, all three archetypes)
 - FastAPI backend (7 route modules, async task execution)
 - Next.js 14 dashboard with dark theme
 - WebSocket live metrics streaming
 - SSE replay streaming
-- 266 automated tests (22 unit + 4 integration modules)
+- 500 automated tests (22 unit + 4 integration modules)
 - Two deployment-readiness audits — all issues resolved
 
 **Planned extensions:**

@@ -165,3 +165,28 @@ Verified no Mixed or Competitive environment files, adapters, or metrics collect
 - `simulation/adapters/pettingzoo.py` — unchanged
 - `simulation/adapters/competitive_pettingzoo.py` — unchanged
 - `simulation/metrics/` (mixed and competitive collectors) — unchanged
+
+---
+
+## Functionality Audit (Post-Cooperative Release)
+
+Reference: docs/functionality-audit.md for full details.
+
+13 issues found across all pages. All fixed before merge to main.
+
+| ID | Severity | Page | Description | Status |
+|----|----------|------|-------------|--------|
+| RS-Live-1 | Critical | RS live run page | Tailwind light-mode classes | Fixed |
+| RS-Replay-1 | Critical | RS replay page | Tailwind light-mode classes | Fixed |
+| HH-Live-1 | Critical | HH live run page | Tailwind light-mode classes | Fixed |
+| HH-Replay-1 | Critical | HH replay page | Tailwind light-mode classes | Fixed |
+| Home-1 | Major | Home page | Total runs excludes cooperative | Fixed |
+| Home-2 | Major | Home page | League members excludes cooperative | Fixed |
+| Home-3 | Major | Home page | Reports excludes cooperative | Fixed |
+| Home-4 | Major | Home page | Recent activity excludes cooperative | Fixed |
+| HH-2 | Major | HH live run page | MetricsChart used instead of CompetitiveMetricsChart | Fixed |
+| CP-1 | Major | Cooperative simulate page | Run stays inline instead of navigating to dedicated page | Fixed |
+| LG-1 | Major | League cooperative tab | No Run button per member row | Fixed |
+| Home-5 | Minor | Home page | Environments stat hardcoded | Fixed |
+| NAV-1 | Minor | Nav | 4 nav items instead of 3 | Fixed |
+| RS-Page-1 | Minor | Research page | Sort label misleading | Fixed |

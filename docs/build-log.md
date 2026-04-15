@@ -691,3 +691,26 @@ Tests: 266 passed, 0 failed
 - Template name changed from "Cooperative Task Simulation" to "Cooperative Task Arena"
 - Home page updated — 3 environments, Cooperative research question card, CTA link added
 - About page updated — 3 archetypes, 500 tests, 16 strategy labels, cooperative user guide section, cooperative environment card
+
+### Phase 5: Functionality Audit & Final Fixes
+- Full end-to-end functionality audit conducted — docs/functionality-audit.md
+- 13 issues found: 4 Critical, 7 Major, 2 Minor (NAV-1 counted separately)
+- All 13 fixed before merge to main
+
+Critical fixes (4):
+- RS and HH live run pages using Tailwind light-mode color classes — replaced with CSS custom properties
+- RS and HH replay pages using Tailwind light-mode color classes — replaced with CSS custom properties
+
+Major fixes (7):
+- Home page stats excluding cooperative data — total runs, league members, reports, recent activity all now include cooperative
+- Head-to-Head live run page using Mixed MetricsChart — replaced with new CompetitiveMetricsChart
+- Cooperative run staying inline — now navigates to /simulate/cooperative/run/[run_id]
+- Cooperative ratings tab missing Run button per member — added matching RS/HH pattern
+- Cooperative run page missing back link — added
+- Cooperative advanced mode missing parameters — 18 advanced fields added
+- League tab guard bug causing HH content in cooperative tab — fixed
+
+Minor fixes (2 of 3 fixed, 1 renamed):
+- Home environments stat hardcoded — defined as ENVIRONMENT_COUNT constant
+- About removed from primary nav — nav now shows 3 items (Simulate, League, Research)
+- Sort label misleading — renamed from "Highest robustness score" to "Oldest first"
