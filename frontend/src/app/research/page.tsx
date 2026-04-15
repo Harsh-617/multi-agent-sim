@@ -15,7 +15,7 @@ interface ReportEntry {
 
 type ArchetypeFilter = "All" | "Resource Sharing" | "Head-to-Head" | "Cooperative";
 type TypeFilter = "All" | "Robustness" | "Strategy" | "Benchmark";
-type SortMode = "latest" | "robustness";
+type SortMode = "latest" | "oldest";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -284,9 +284,12 @@ export default function ResearchPage() {
   }
 
   // Sort
-  if (sort === "robustness") {
-    // No scores available from list endpoint — use report ID descending as proxy
-    merged.sort((a, b) => b.report_id.localeCompare(a.report_id));
+  if (sort === "oldest") {
+    merged.sort((a, b) => {
+      const ta = new Date(a.timestamp).getTime() || 0;
+      const tb = new Date(b.timestamp).getTime() || 0;
+      return ta - tb;
+    });
   } else {
     // "latest" — sort by timestamp descending
     merged.sort((a, b) => {
@@ -386,13 +389,8 @@ export default function ResearchPage() {
             }}
           >
             <option value="latest">Latest first</option>
-            <option value="robustness">Highest robustness score</option>
+            <option value="oldest">Oldest first</option>
           </select>
-          {sort === "robustness" && (
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
-              Robustness scores available in report detail
-            </div>
-          )}
         </div>
       </div>
 

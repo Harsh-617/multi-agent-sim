@@ -5,6 +5,8 @@ import Link from "next/link";
 import NetworkBackground from "@/components/NetworkBackground";
 import { getCooperativeRuns, getCooperativeLeagueMembers, CooperativeRunListItem } from "@/lib/api";
 
+const ENVIRONMENT_COUNT = 3;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
   const [stats, setStats] = useState<Stats>({
     totalRuns: "—",
     leagueMembers: "—",
-    environments: "3",
+    environments: String(ENVIRONMENT_COUNT),
     reports: "—",
   });
   const [failCount, setFailCount] = useState(0);
@@ -90,7 +92,7 @@ function useHomeStats(): { stats: Stats; hasError: boolean } {
       .catch(trackFail);
 
     // environments is a static count — no fetch needed
-    setStats((s) => ({ ...s, environments: "3" }));
+    setStats((s) => ({ ...s, environments: String(ENVIRONMENT_COUNT) }));
   }, []);
 
   return { stats, hasError: failCount >= totalFetches };
