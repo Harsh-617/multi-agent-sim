@@ -1272,6 +1272,77 @@ export function getCooperativeReportStrategies(
 }
 
 // ---------------------------------------------------------------------------
+// Transfer Experiment
+// ---------------------------------------------------------------------------
+
+export interface TransferRequest {
+  source_member_id: string;
+  source_archetype: "mixed" | "competitive" | "cooperative";
+  target_archetype: "mixed" | "competitive" | "cooperative";
+  target_config_id: string;
+  episodes: number;
+  seed: number;
+}
+
+export interface TransferStatus {
+  transfer_id: string;
+  status: "pending" | "running_transfer" | "running_baseline" | "saving" | "done" | "error";
+  error?: string;
+  report_id?: string;
+}
+
+export interface TransferEpisodeResult {
+  episode: number;
+  primary_metric: number;
+  [key: string]: unknown;
+}
+
+export interface TransferReport {
+  report_id: string;
+  report_type: "transfer";
+  source_archetype: "mixed" | "competitive" | "cooperative";
+  source_member_id: string;
+  source_obs_dim: number;
+  source_strategy_label: string | null;
+  source_elo: number;
+  target_archetype: "mixed" | "competitive" | "cooperative";
+  target_config_hash: string;
+  target_obs_dim: number;
+  obs_mismatch_strategy: "truncate" | "pad" | "none";
+  episodes: number;
+  seed: number;
+  transferred_results: TransferEpisodeResult[];
+  baseline_results: TransferEpisodeResult[];
+  transferred_mean: number;
+  baseline_mean: number;
+  vs_baseline_delta: number;
+  vs_baseline_pct: number;
+  timestamp?: string;
+}
+
+export function startTransferExperiment(
+  req: TransferRequest,
+): Promise<{ transfer_id: string; status: string }> {
+  return json(`${BASE}/transfer/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+}
+
+export function getTransferStatus(transferId: string): Promise<TransferStatus> {
+  return json(`${BASE}/transfer/status/${encodeURIComponent(transferId)}`);
+}
+
+export function getTransferReports(): Promise<TransferReport[]> {
+  return json(`${BASE}/transfer/reports`);
+}
+
+export function getTransferReport(reportId: string): Promise<TransferReport> {
+  return json(`${BASE}/transfer/reports/${encodeURIComponent(reportId)}`);
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket
 // ---------------------------------------------------------------------------
 

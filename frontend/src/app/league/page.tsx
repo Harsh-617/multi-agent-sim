@@ -63,6 +63,7 @@ import LineageGraph from "@/components/LineageGraph";
 import CooperativeLeagueLineage from "@/components/CooperativeLeagueLineage";
 import CooperativeChampionBenchmark from "@/components/CooperativeChampionBenchmark";
 import CooperativeChampionRobustness from "@/components/CooperativeChampionRobustness";
+import TransferExperiment from "@/components/TransferExperiment";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1508,6 +1509,17 @@ export default function LeaguePage() {
                         <ChampionRobustness configs={rsConfigs} archetypeFilter="mixed" />
                       )}
                     </div>
+                    <div>
+                      <h3 style={{fontSize: 13, fontWeight: 600, marginBottom: 8}}>Transfer Experiment</h3>
+                      <TransferExperiment
+                        sourceArchetype="mixed"
+                        sourceMemberId={rsChampion?.member_id ?? ""}
+                        sourceStrategyLabel={
+                          rsEvolutionData.members.find((m) => m.member_id === rsChampion?.member_id)?.label ?? null
+                        }
+                        sourceElo={rsChampionRating ?? null}
+                      />
+                    </div>
                   </div>
                 )
               )}
@@ -1834,6 +1846,17 @@ export default function LeaguePage() {
                       </p>
                     )}
                   </div>
+                  <div>
+                    <h3 style={{fontSize: 13, fontWeight: 600, marginBottom: 8}}>Transfer Experiment</h3>
+                    <TransferExperiment
+                      sourceArchetype="competitive"
+                      sourceMemberId={hhChampion?.member_id ?? ""}
+                      sourceStrategyLabel={
+                        hhEvolutionData.members.find((m) => m.member_id === hhChampion?.member_id)?.strategy?.label ?? null
+                      }
+                      sourceElo={hhChampionRating ?? null}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -2109,6 +2132,17 @@ export default function LeaguePage() {
                         {coopRobData && <CooperativeChampionRobustness data={coopRobData} />}
                       </>
                     )}
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Transfer Experiment</h3>
+                    <TransferExperiment
+                      sourceArchetype="cooperative"
+                      sourceMemberId={coopChampion?.member_id ?? ""}
+                      sourceStrategyLabel={
+                        coopEvolution.members.find((m) => m.member_id === coopChampion?.member_id)?.strategy?.label ?? null
+                      }
+                      sourceElo={coopChampion?.rating ?? null}
+                    />
                   </div>
                 </div>
               )}

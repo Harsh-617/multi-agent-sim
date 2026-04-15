@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { getTransferReports } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -11,21 +12,23 @@ interface ReportEntry {
   report_id: string;
   timestamp: string;
   archetype: "Resource Sharing" | "Head-to-Head" | "Cooperative";
+  is_transfer?: boolean;
 }
 
 type ArchetypeFilter = "All" | "Resource Sharing" | "Head-to-Head" | "Cooperative";
-type TypeFilter = "All" | "Robustness" | "Strategy" | "Benchmark";
+type TypeFilter = "All" | "Robustness" | "Strategy" | "Benchmark" | "Transfer";
 type SortMode = "latest" | "oldest";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function inferType(id: string): "Robustness" | "Strategy" | "Benchmark" | "Other" {
+function inferType(id: string): "Robustness" | "Strategy" | "Benchmark" | "Transfer" | "Other" {
   if (id.startsWith("robust_")) return "Robustness";
   if (id.startsWith("eval_")) return "Strategy";
   if (id.startsWith("benchmark_")) return "Benchmark";
   if (id.startsWith("competitive_")) return "Robustness";
+  if (id.startsWith("transfer_")) return "Transfer";
   return "Other";
 }
 
@@ -120,15 +123,16 @@ function ArchetypeBadge({ archetype }: { archetype: "Resource Sharing" | "Head-t
 }
 
 function TypeBadge({ type }: { type: string }) {
+  const isTransfer = type === "Transfer";
   return (
     <span
       style={{
         fontSize: 11,
         borderRadius: 4,
         padding: "2px 8px",
-        background: "var(--bg-elevated)",
-        color: "var(--text-tertiary)",
-        border: "1px solid var(--bg-border)",
+        background: isTransfer ? "rgba(20,184,166,0.1)" : "var(--bg-elevated)",
+        color: isTransfer ? "#14b8a6" : "var(--text-tertiary)",
+        border: `1px solid ${isTransfer ? "rgba(20,184,166,0.2)" : "var(--bg-border)"}`,
       }}
     >
       {type}
@@ -180,7 +184,9 @@ function ReportCard({ report }: { report: ReportEntry }) {
       {/* Open button */}
       <Link
         href={
-          report.archetype === "Cooperative"
+          report.is_transfer
+            ? `/research/transfer/${encodeURIComponent(report.report_id)}`
+            : report.archetype === "Cooperative"
             ? `/research/cooperative/${encodeURIComponent(report.report_id)}`
             : `/research/${encodeURIComponent(report.report_id)}`
         }
@@ -215,6 +221,7 @@ export default function ResearchPage() {
   const [mixedReports, setMixedReports] = useState<ReportEntry[]>([]);
   const [compReports, setCompReports] = useState<ReportEntry[]>([]);
   const [coopReports, setCoopReports] = useState<ReportEntry[]>([]);
+  const [transferReports, setTransferReports] = useState<ReportEntry[]>([]);
   const [loadingMixed, setLoadingMixed] = useState(true);
   const [loadingComp, setLoadingComp] = useState(true);
   const [loadingCoop, setLoadingCoop] = useState(true);
@@ -268,13 +275,31 @@ export default function ResearchPage() {
       )
       .catch(() => setErrorCoop(true))
       .finally(() => setLoadingCoop(false));
+
+    getTransferReports()
+      .then((data) =>
+        setTransferReports(
+          data.map((d) => ({
+            report_id: d.report_id,
+            timestamp: d.timestamp ?? "",
+            archetype:
+              d.source_archetype === "competitive"
+                ? ("Head-to-Head" as const)
+                : d.source_archetype === "cooperative"
+                ? ("Cooperative" as const)
+                : ("Resource Sharing" as const),
+            is_transfer: true,
+          })),
+        ),
+      )
+      .catch(() => {/* silently ignore if transfer endpoint not yet deployed */});
   }, []);
 
   const loading = loadingMixed || loadingComp || loadingCoop;
   const bothErrored = errorMixed && errorComp && errorCoop;
 
   // Merge and filter
-  let merged = [...mixedReports, ...compReports, ...coopReports];
+  let merged = [...mixedReports, ...compReports, ...coopReports, ...transferReports];
 
   if (archetypeFilter !== "All") {
     merged = merged.filter((r) => r.archetype === archetypeFilter);
@@ -360,7 +385,7 @@ export default function ResearchPage() {
         <div>
           <div style={filterLabel}>Type</div>
           <div style={{ display: "flex", gap: 6 }}>
-            {(["All", "Robustness", "Strategy", "Benchmark"] as TypeFilter[]).map((v) => (
+            {(["All", "Robustness", "Strategy", "Benchmark", "Transfer"] as TypeFilter[]).map((v) => (
               <Pill
                 key={v}
                 label={v}
