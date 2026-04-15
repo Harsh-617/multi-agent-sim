@@ -185,7 +185,10 @@ export default function TransferExperiment({
       if (s.status === "done") {
         stopPolling();
         setRunning(false);
-        if (s.report_id) {
+        const inline = (s as unknown as { result?: TransferReport }).result;
+        if (inline) {
+          setReport(inline);
+        } else if (s.report_id) {
           try {
             const r = await getTransferReport(s.report_id);
             setReport(r);
@@ -248,7 +251,7 @@ export default function TransferExperiment({
   const metricName = PRIMARY_METRIC_NAME[targetArchetype];
   const canRun = !running && filteredConfigs.length > 0 && !filteringConfigs;
 
-  const vsSign = report
+  const vsSign = report && report.vs_baseline_pct != null
     ? report.vs_baseline_pct >= 0 ? "+" : ""
     : "";
 
@@ -446,7 +449,7 @@ export default function TransferExperiment({
                   <div style={{ fontSize: 11, color: "#888888" }}>{report.source_strategy_label}</div>
                 )}
                 <div style={{ fontSize: 12, color: "#ededed" }}>
-                  Elo: <span style={{ color: "#14b8a6", fontWeight: 600 }}>{report.source_elo.toFixed(1)}</span>
+                  Elo: <span style={{ color: "#14b8a6", fontWeight: 600 }}>{report.source_elo != null ? report.source_elo.toFixed(1) : "—"}</span>
                 </div>
               </div>
             </InfoCard>
@@ -510,18 +513,18 @@ export default function TransferExperiment({
                     {metricName}
                   </td>
                   <td style={{ padding: "10px 12px", color: "var(--text-primary)", fontWeight: 600, fontFamily: "monospace" }}>
-                    {report.transferred_mean.toFixed(4)}
+                    {report.transferred_mean != null ? report.transferred_mean.toFixed(4) : "—"}
                   </td>
                   <td style={{ padding: "10px 12px", color: "var(--text-secondary)", fontFamily: "monospace" }}>
-                    {report.baseline_mean.toFixed(4)}
+                    {report.baseline_mean != null ? report.baseline_mean.toFixed(4) : "—"}
                   </td>
                   <td style={{
                     padding: "10px 12px",
                     fontWeight: 600,
                     fontFamily: "monospace",
-                    color: report.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171",
+                    color: report.vs_baseline_pct != null ? (report.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171") : "var(--text-secondary)",
                   }}>
-                    {vsSign}{report.vs_baseline_pct.toFixed(1)}%
+                    {report.vs_baseline_pct != null ? `${vsSign}${report.vs_baseline_pct.toFixed(1)}%` : "—"}
                   </td>
                 </tr>
               </tbody>
@@ -531,18 +534,22 @@ export default function TransferExperiment({
           {/* Interpretation */}
           <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>
             Transferred agent performed{" "}
-            <span style={{ color: report.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171", fontWeight: 600 }}>
-              {Math.abs(report.vs_baseline_pct).toFixed(1)}%{" "}
-              {report.vs_baseline_pct >= 0 ? "above" : "below"}
-            </span>
+            {report.vs_baseline_pct != null ? (
+              <span style={{ color: report.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171", fontWeight: 600 }}>
+                {Math.abs(report.vs_baseline_pct).toFixed(1)}%{" "}
+                {report.vs_baseline_pct >= 0 ? "above" : "below"}
+              </span>
+            ) : (
+              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>—</span>
+            )}
             {" "}random baseline.
           </p>
 
           {/* Report link */}
-          {status?.report_id && (
+          {report?.report_id && (
             <div>
               <Link
-                href={`/research/transfer/${encodeURIComponent(status.report_id)}`}
+                href={`/research/transfer/${encodeURIComponent(report.report_id)}`}
                 style={{
                   fontSize: 13,
                   color: "#14b8a6",

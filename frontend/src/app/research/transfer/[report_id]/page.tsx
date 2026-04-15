@@ -94,7 +94,7 @@ export default function TransferReportDetailPage() {
   }
 
   const metricName = PRIMARY_METRIC_NAME[data.target_archetype];
-  const vsSign = data.vs_baseline_pct >= 0 ? "+" : "";
+  const vsSign = data.vs_baseline_pct != null ? (data.vs_baseline_pct >= 0 ? "+" : "") : "";
   const obsDiff = data.source_obs_dim - data.target_obs_dim;
   const hasMismatch = data.source_obs_dim !== data.target_obs_dim;
 
@@ -164,7 +164,7 @@ export default function TransferReportDetailPage() {
                 <MetaRow label="Strategy Label" value={data.source_strategy_label} />
               )}
               <MetaRow label="Elo Rating" value={
-                <span style={{ color: "#14b8a6", fontWeight: 600 }}>{data.source_elo.toFixed(1)}</span>
+                <span style={{ color: "#14b8a6", fontWeight: 600 }}>{data.source_elo != null ? data.source_elo.toFixed(1) : "—"}</span>
               } />
               <MetaRow label="Obs Dim" value={`${data.source_obs_dim}d`} />
             </dl>
@@ -270,25 +270,27 @@ export default function TransferReportDetailPage() {
                     {metricName}
                   </td>
                   <td style={{ padding: "10px 12px", color: "var(--text-primary)", fontWeight: 600, fontFamily: "monospace" }}>
-                    {data.transferred_mean.toFixed(4)}
+                    {data.transferred_mean != null ? data.transferred_mean.toFixed(4) : "—"}
                   </td>
                   <td style={{ padding: "10px 12px", color: "var(--text-secondary)", fontFamily: "monospace" }}>
-                    {data.baseline_mean.toFixed(4)}
+                    {data.baseline_mean != null ? data.baseline_mean.toFixed(4) : "—"}
                   </td>
                   <td style={{
                     padding: "10px 12px",
                     fontFamily: "monospace",
-                    color: data.vs_baseline_delta >= 0 ? "#14b8a6" : "#f87171",
+                    color: data.vs_baseline_delta != null ? (data.vs_baseline_delta >= 0 ? "#14b8a6" : "#f87171") : "var(--text-secondary)",
                   }}>
-                    {data.vs_baseline_delta >= 0 ? "+" : ""}{data.vs_baseline_delta.toFixed(4)}
+                    {data.vs_baseline_delta != null
+                      ? `${data.vs_baseline_delta >= 0 ? "+" : ""}${data.vs_baseline_delta.toFixed(4)}`
+                      : "—"}
                   </td>
                   <td style={{
                     padding: "10px 12px",
                     fontWeight: 600,
                     fontFamily: "monospace",
-                    color: data.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171",
+                    color: data.vs_baseline_pct != null ? (data.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171") : "var(--text-secondary)",
                   }}>
-                    {vsSign}{data.vs_baseline_pct.toFixed(1)}%
+                    {data.vs_baseline_pct != null ? `${vsSign}${data.vs_baseline_pct.toFixed(1)}%` : "—"}
                   </td>
                 </tr>
               </tbody>
@@ -298,10 +300,14 @@ export default function TransferReportDetailPage() {
           {/* Interpretation summary */}
           <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 12 }}>
             Transferred agent performed{" "}
-            <span style={{ color: data.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171", fontWeight: 600 }}>
-              {Math.abs(data.vs_baseline_pct).toFixed(1)}%{" "}
-              {data.vs_baseline_pct >= 0 ? "above" : "below"}
-            </span>
+            {data.vs_baseline_pct != null ? (
+              <span style={{ color: data.vs_baseline_pct >= 0 ? "#14b8a6" : "#f87171", fontWeight: 600 }}>
+                {Math.abs(data.vs_baseline_pct).toFixed(1)}%{" "}
+                {data.vs_baseline_pct >= 0 ? "above" : "below"}
+              </span>
+            ) : (
+              <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>—</span>
+            )}
             {" "}random baseline on {metricName} in the {ARCHETYPE_LABELS[data.target_archetype]} environment.
           </p>
         </section>
@@ -347,10 +353,10 @@ export default function TransferReportDetailPage() {
                           {t.episode}
                         </td>
                         <td style={{ padding: "8px 12px", color: "var(--text-primary)", fontFamily: "monospace" }}>
-                          {t.primary_metric.toFixed(4)}
+                          {(t as any)[metricName] != null ? ((t as any)[metricName] as number).toFixed(4) : "—"}
                         </td>
                         <td style={{ padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "monospace" }}>
-                          {b ? b.primary_metric.toFixed(4) : "—"}
+                          {b && (b as any)[metricName] != null ? ((b as any)[metricName] as number).toFixed(4) : "—"}
                         </td>
                       </tr>
                     );
