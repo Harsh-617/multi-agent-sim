@@ -1,6 +1,7 @@
 /** REST + WebSocket helpers for the simulation backend. */
 
 const BASE = "/api";
+const TRANSFER_BASE = `${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"}/api`;
 
 // ---------------------------------------------------------------------------
 // Types (mirroring backend schemas)
@@ -1323,7 +1324,7 @@ export interface TransferReport {
 export function startTransferExperiment(
   req: TransferRequest,
 ): Promise<{ transfer_id: string; status: string }> {
-  return json(`${BASE}/transfer/run`, {
+  return json(`${TRANSFER_BASE}/transfer/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -1331,15 +1332,15 @@ export function startTransferExperiment(
 }
 
 export function getTransferStatus(transferId: string): Promise<TransferStatus> {
-  return json(`${BASE}/transfer/status/${encodeURIComponent(transferId)}`);
+  return json(`${TRANSFER_BASE}/transfer/status/${encodeURIComponent(transferId)}`);
 }
 
 export function getTransferReports(): Promise<TransferReport[]> {
-  return json(`${BASE}/transfer/reports`);
+  return json(`${TRANSFER_BASE}/transfer/reports`);
 }
 
 export function getTransferReport(reportId: string): Promise<TransferReport> {
-  return json(`${BASE}/transfer/reports/${encodeURIComponent(reportId)}`);
+  return json(`${TRANSFER_BASE}/transfer/reports/${encodeURIComponent(reportId)}`);
 }
 
 // ---------------------------------------------------------------------------
