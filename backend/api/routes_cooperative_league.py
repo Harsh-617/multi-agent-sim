@@ -43,7 +43,9 @@ from simulation.league.cooperative_ratings import (
     save_cooperative_ratings,
 )
 from simulation.league.cooperative_registry import CooperativeLeagueRegistry
+from simulation.runner.cooperative_experiment_runner import run_cooperative_experiment_async
 
+from backend.runner.run_manager import manager as _run_manager
 from backend.storage_root import STORAGE_ROOT
 
 router = APIRouter(prefix="/api/cooperative/league", tags=["cooperative-league"])
@@ -239,6 +241,45 @@ async def get_coop_member(member_id: str) -> dict:
     ratings = _ratings_map()
     meta["rating"] = ratings.get(member_id, _DEFAULT_RATING)
     return meta
+
+
+class _MemberRunRequest(BaseModel):
+    config_id: str = Field(description="ID of a saved cooperative config to run with.")
+
+
+@router.post("/members/{member_id}/run")
+async def run_coop_league_member(member_id: str, req: _MemberRunRequest) -> dict:
+    """Start a live run using a cooperative league member's snapshot as the agent policy."""
+    if _run_manager.running:
+        raise HTTPException(status_code=409, detail="A run is already in progress.")
+
+    try:
+        member_path = _registry.load_member(member_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown cooperative league member: {member_id}")
+
+    config_path = CONFIGS_DIR / f"{req.config_id}.json"
+    if not config_path.exists():
+        raise HTTPException(status_code=404, detail=f"Config {req.config_id} not found.")
+
+    raw_data = json.loads(config_path.read_text(encoding="utf-8"))
+    config = CooperativeEnvironmentConfig.model_validate(raw_data)
+
+    run_id = uuid.uuid4().hex[:12]
+    _run_manager.reset_state()
+
+    async def _run() -> dict:
+        return await run_cooperative_experiment_async(
+            config, run_id, STORAGE_ROOT / "runs", _run_manager,
+            agent_policy="cooperative_ppo",
+            agent_kwargs={"member_dir": str(member_path)},
+            config_id=req.config_id,
+        )
+
+    task = asyncio.create_task(_run())
+    _run_manager.attach_task(task)
+    await asyncio.sleep(0)
+    return {"run_id": run_id}
 
 
 # ------------------------------------------------------------------

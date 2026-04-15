@@ -1087,6 +1087,20 @@ export function getCooperativeLeagueMember(
   return json(`${BASE}/cooperative/league/members/${encodeURIComponent(memberId)}`);
 }
 
+export function startCooperativeLeagueMemberRun(
+  memberId: string,
+  configId: string,
+): Promise<{ run_id: string }> {
+  return json(
+    `${BASE}/cooperative/league/members/${encodeURIComponent(memberId)}/run`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config_id: configId }),
+    },
+  );
+}
+
 export function getCooperativeChampion(): Promise<CooperativeChampionInfo> {
   return json(`${BASE}/cooperative/league/champion`);
 }

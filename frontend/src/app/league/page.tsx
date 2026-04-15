@@ -53,6 +53,7 @@ import {
   startCooperativePipeline,
   getCooperativePipelineStatus,
   recomputeCooperativeLeagueRatings,
+  startCooperativeLeagueMemberRun,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
@@ -551,6 +552,7 @@ export default function LeaguePage() {
   const [coopBenchRunning, setCoopBenchRunning] = useState(false);
   const [coopBenchData, setCoopBenchData] = useState<CooperativeBenchmarkResponse | null>(null);
   const [coopRobConfigId, setCoopRobConfigId] = useState("default");
+  const [coopStartingId, setCoopStartingId] = useState<string | null>(null);
 
   // --- Pipeline config state (per archetype) ---
   const [rsPipelineConfig, setRsPipelineConfig] = useState<PipelineConfig>({
@@ -863,6 +865,22 @@ export default function LeaguePage() {
       setCoopRecomputeStatus("error");
     } finally {
       setCoopRecomputing(false);
+    }
+  }
+
+  async function handleCoopRun(memberId: string) {
+    if (coopFilteredConfigs.length === 0) {
+      setCoopError("No cooperative configs available. Create one on the home page first.");
+      return;
+    }
+    setCoopStartingId(memberId);
+    setCoopError(null);
+    try {
+      const { run_id } = await startCooperativeLeagueMemberRun(memberId, coopFilteredConfigs[0].config_id);
+      router.push(`/simulate/cooperative/run/${run_id}`);
+    } catch (e) {
+      setCoopError(String(e));
+      setCoopStartingId(null);
     }
   }
 
@@ -1907,6 +1925,7 @@ export default function LeaguePage() {
                         <th style={{ padding: "8px 16px 8px 0" }}>Parent</th>
                         <th style={{ padding: "8px 16px 8px 0" }}>Created</th>
                         <th style={{ padding: "8px 16px 8px 0" }}>Notes</th>
+                        <th style={{ padding: "8px 0" }} />
                       </tr>
                     </thead>
                     <tbody>
@@ -1924,6 +1943,15 @@ export default function LeaguePage() {
                             {m.created_at ? new Date(m.created_at).toLocaleString() : "—"}
                           </td>
                           <td style={{ padding: "8px 16px 8px 0", fontSize: 12 }}>{m.notes ?? "—"}</td>
+                          <td style={{ padding: "8px 0" }}>
+                            <button
+                              onClick={() => handleCoopRun(m.member_id)}
+                              disabled={coopStartingId !== null}
+                              style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: coopStartingId !== null ? 0.5 : 1 }}
+                            >
+                              {coopStartingId === m.member_id ? "Starting..." : "Run"}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
