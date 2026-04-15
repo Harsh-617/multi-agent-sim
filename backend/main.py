@@ -19,6 +19,7 @@ from backend.api.routes_league import router as league_router
 from backend.api.routes_pipeline import competitive_router as competitive_pipeline_router
 from backend.api.routes_pipeline import router as pipeline_router
 from backend.api.routes_reports import router as reports_router
+from backend.api.routes_transfer import router as transfer_router
 from backend.api.ws_metrics import router as ws_router
 from backend.storage_root import STORAGE_ROOT
 
@@ -58,6 +59,7 @@ app.include_router(league_router)
 app.include_router(competitive_pipeline_router)
 app.include_router(pipeline_router)
 app.include_router(reports_router)
+app.include_router(transfer_router)
 app.include_router(ws_router)
 
 
