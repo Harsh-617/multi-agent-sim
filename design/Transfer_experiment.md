@@ -171,3 +171,20 @@ summary.json        — full experiment metadata and results
 - Multi-agent transfer (inject transferred agent into population, measure influence)
 - Fine-tuning on target environment after transfer
 - Transfer leaderboard across all archetype pairs
+
+
+---
+
+## Ambiguities Found & Resolved
+
+During the sanity check phase, the following gaps and underspecifications were identified and resolved. These resolutions are authoritative.
+
+1. **Primary metric undefined per target archetype:** The results table referenced `transferred_mean` as a single scalar but never defined what metric it represents. Resolution: primary metric is archetype-specific — Mixed target → `cooperation_rate` [0,1], Competitive target → normalized rank (1/num_agents for rank 1, descending), Cooperative target → `completion_ratio` [0,1]. Higher is always better across all three.
+
+2. **Background task status stages undefined:** The transfer endpoint was described as a background task with no defined stages. Resolution: status progresses through `pending → running_transfer → running_baseline → saving → done → error`. Frontend polls every 2 seconds and displays current stage.
+
+3. **Source member selector vs champion only:** The design referenced `source_member_id` as a parameter implying any league member could be transferred, but the UI was placed on the Champion tab. Resolution: V1 transfers the current champion only — no member selector in the UI. `source_member_id` is determined automatically from the champion endpoint. Member-level transfer selection deferred to V2.
+
+4. **Transfer reports not distinguishable from other report types:** The Research page filter needed a way to distinguish transfer reports from robustness and eval reports. Resolution: `summary.json` includes `report_type: "transfer"` field. Research page adds "Transfer" as a filter option alongside "Robustness" and "Strategy".
+
+5. **Config dropdown shows all configs regardless of target archetype:** The target config selector would show Mixed, Competitive, and Cooperative configs mixed together. Resolution: config dropdown filters by `identity.environment_type` matching the selected target archetype — same pattern as cooperative benchmark config filtering already implemented in league/page.tsx.
