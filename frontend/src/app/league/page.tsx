@@ -54,6 +54,8 @@ import {
   getCooperativePipelineStatus,
   recomputeCooperativeLeagueRatings,
   startCooperativeLeagueMemberRun,
+  downloadChampionPolicy,
+  downloadMemberPolicy,
 } from "@/lib/api";
 import LeagueLineage from "@/components/LeagueLineage";
 import ChampionBenchmark from "@/components/ChampionBenchmark";
@@ -1446,13 +1448,22 @@ export default function LeaguePage() {
                           </td>
                           <td style={{padding: "8px 16px 8px 0", fontSize: 12}}>{m.notes ?? "—"}</td>
                           <td style={{padding: "8px 0"}}>
-                            <button
-                              onClick={() => handleRsRun(m.member_id)}
-                              disabled={rsStartingId !== null}
-                              style={{padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: rsStartingId !== null ? 0.5 : 1}}
-                            >
-                              {rsStartingId === m.member_id ? "Starting..." : "Run"}
-                            </button>
+                            <span style={{display: "flex", gap: 4, alignItems: "center"}}>
+                              <button
+                                onClick={() => handleRsRun(m.member_id)}
+                                disabled={rsStartingId !== null}
+                                style={{padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: rsStartingId !== null ? 0.5 : 1}}
+                              >
+                                {rsStartingId === m.member_id ? "Starting..." : "Run"}
+                              </button>
+                              <button
+                                onClick={() => downloadMemberPolicy("mixed", m.member_id)}
+                                title="Export policy"
+                                style={{padding: "4px 8px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer"}}
+                              >
+                                ↓
+                              </button>
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -1493,6 +1504,17 @@ export default function LeaguePage() {
                       <p style={{color: "var(--text-secondary)"}}>
                         No league members yet. Train a policy and save a snapshot to get started.
                       </p>
+                    )}
+
+                    {rsChampion && (
+                      <div>
+                        <button
+                          onClick={() => downloadChampionPolicy("mixed")}
+                          style={{padding: "8px 16px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, fontWeight: 500, border: "none", cursor: "pointer"}}
+                        >
+                          Export Champion Policy ↓
+                        </button>
+                      </div>
                     )}
 
                     <div>
@@ -1573,15 +1595,22 @@ export default function LeaguePage() {
                               : "—"}
                           </td>
                           <td style={{padding: "8px 0"}}>
-                            <button
-                              onClick={() => handleHhRun(m.member_id)}
-                              disabled={hhStartingId !== null}
-                              style={{padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: hhStartingId !== null ? 0.5 : 1}}
-                            >
-                              {hhStartingId === m.member_id
-                                ? "Starting..."
-                                : "Run"}
-                            </button>
+                            <span style={{display: "flex", gap: 4, alignItems: "center"}}>
+                              <button
+                                onClick={() => handleHhRun(m.member_id)}
+                                disabled={hhStartingId !== null}
+                                style={{padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: hhStartingId !== null ? 0.5 : 1}}
+                              >
+                                {hhStartingId === m.member_id ? "Starting..." : "Run"}
+                              </button>
+                              <button
+                                onClick={() => downloadMemberPolicy("competitive", m.member_id)}
+                                title="Export policy"
+                                style={{padding: "4px 8px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer"}}
+                              >
+                                ↓
+                              </button>
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -1616,6 +1645,17 @@ export default function LeaguePage() {
                     <p style={{color: "var(--text-secondary)"}}>
                       No league members yet &mdash; run the pipeline first.
                     </p>
+                  )}
+
+                  {hhChampion && (
+                    <div>
+                      <button
+                        onClick={() => downloadChampionPolicy("competitive")}
+                        style={{padding: "8px 16px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, fontWeight: 500, border: "none", cursor: "pointer"}}
+                      >
+                        Export Champion Policy ↓
+                      </button>
+                    </div>
                   )}
 
                   {/* Benchmark section */}
@@ -1967,13 +2007,22 @@ export default function LeaguePage() {
                           </td>
                           <td style={{ padding: "8px 16px 8px 0", fontSize: 12 }}>{m.notes ?? "—"}</td>
                           <td style={{ padding: "8px 0" }}>
-                            <button
-                              onClick={() => handleCoopRun(m.member_id)}
-                              disabled={coopStartingId !== null}
-                              style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: coopStartingId !== null ? 0.5 : 1 }}
-                            >
-                              {coopStartingId === m.member_id ? "Starting..." : "Run"}
-                            </button>
+                            <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <button
+                                onClick={() => handleCoopRun(m.member_id)}
+                                disabled={coopStartingId !== null}
+                                style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer", opacity: coopStartingId !== null ? 0.5 : 1 }}
+                              >
+                                {coopStartingId === m.member_id ? "Starting..." : "Run"}
+                              </button>
+                              <button
+                                onClick={() => downloadMemberPolicy("cooperative", m.member_id)}
+                                title="Export policy"
+                                style={{ padding: "4px 8px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, border: "none", cursor: "pointer" }}
+                              >
+                                ↓
+                              </button>
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -2006,6 +2055,17 @@ export default function LeaguePage() {
                     <p style={{ color: "var(--text-secondary)" }}>
                       No league members yet — run the cooperative pipeline first.
                     </p>
+                  )}
+
+                  {coopChampion && coopChampion.member_id && (
+                    <div>
+                      <button
+                        onClick={() => downloadChampionPolicy("cooperative")}
+                        style={{ padding: "8px 16px", background: "#14b8a6", color: "#fff", borderRadius: 6, fontSize: 13, fontWeight: 500, border: "none", cursor: "pointer" }}
+                      >
+                        Export Champion Policy ↓
+                      </button>
+                    </div>
                   )}
 
                   {/* Benchmark section */}

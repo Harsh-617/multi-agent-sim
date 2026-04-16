@@ -1375,3 +1375,29 @@ export function connectMetrics(
 
   return ws;
 }
+
+// ---------------------------------------------------------------------------
+// Policy Export
+// ---------------------------------------------------------------------------
+
+/**
+ * Trigger a browser file download for the current champion's policy zip.
+ * archetype: "mixed" | "competitive" | "cooperative"
+ */
+export function downloadChampionPolicy(archetype: string): void {
+  const url = `${BASE}/export/${encodeURIComponent(archetype)}/champion`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.click();
+}
+
+/**
+ * Trigger a browser file download for a specific member's policy zip.
+ * archetype: "mixed" | "competitive" | "cooperative"
+ */
+export function downloadMemberPolicy(archetype: string, memberId: string): void {
+  const url = `${BASE}/export/${encodeURIComponent(archetype)}/members/${encodeURIComponent(memberId)}`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.click();
+}
