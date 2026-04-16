@@ -92,19 +92,10 @@ def _mismatch_strategy(source_obs_dim: int, target_obs_dim: int) -> str:
 def _probe_target_obs_dim(env: Any, target_archetype: str) -> int:
     """Return the flat observation dimension produced by *env*.
 
-    For cooperative the env has an explicit obs_dim() method.
-    For mixed/competitive we reset and flatten a sample observation.
+    All three archetypes expose an obs_dim() method that computes the
+    dimension analytically from config — immune to empty histories at reset.
     """
-    if target_archetype == "cooperative":
-        return env.obs_dim()
-
-    # Reset to get a real observation, then measure it.
-    sample_obs_dict = env.reset(seed=0)
-    if not sample_obs_dict:
-        return 0
-    sample_obs = next(iter(sample_obs_dict.values()))
-    flat = _flatten_obs_for_archetype(sample_obs, target_archetype)
-    return len(flat)
+    return env.obs_dim()
 
 
 # ---------------------------------------------------------------------------

@@ -130,6 +130,18 @@ class MixedEnvironment(BaseEnvironment):
     # Specs
     # ------------------------------------------------------------------
 
+    def obs_dim(self) -> int:
+        """Return the flattened observation dimension this env produces.
+
+        Layout (matches ppo_shared_agent._flatten_obs + _OBS_KEYS):
+          4 scalars (step, shared_pool, own_resources, num_active_agents)
+          + (num_agents - 1) cooperation scores
+          + observation_memory_steps * 5  (4-hot action type + amount per step)
+        """
+        n = self._config.population.num_agents
+        mem = self._config.agents.observation_memory_steps
+        return 4 + (n - 1) + mem * 5
+
     def observation_spec(self) -> dict[str, Any]:
         return {
             "step": {"type": "int", "min": 0},

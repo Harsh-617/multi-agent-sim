@@ -187,6 +187,22 @@ class CompetitiveEnvironment(BaseEnvironment):
     # Specs
     # ------------------------------------------------------------------
 
+    def obs_dim(self) -> int:
+        """Return the flattened observation dimension this env produces.
+
+        Layout (matches competitive_ppo_agent._flatten_obs + _OBS_KEYS):
+          5 scalars (step, own_score, own_resources, own_rank, num_active_agents)
+          + (num_agents - 1) opponents_scores
+          + observation_memory_steps * 5  (4-hot action type + amount per step)
+          + (num_agents - 1) * opponent_obs_window * 4  (opponents_recent_actions)
+        """
+        n = self._config.population.num_agents
+        n_opp = n - 1
+        mem = self._config.agents.observation_memory_steps
+        window = self._config.layers.opponent_obs_window
+        n_action_types = 4  # BUILD, ATTACK, DEFEND, GAMBLE
+        return 5 + n_opp + mem * (n_action_types + 1) + n_opp * window * n_action_types
+
     def observation_spec(self) -> dict[str, Any]:
         return {
             "step": {"type": "int", "min": 0},
