@@ -1517,7 +1517,7 @@ export default function LeaguePage() {
                         sourceStrategyLabel={
                           rsEvolutionData.members.find((m) => m.member_id === rsChampion?.member_id)?.label ?? null
                         }
-                        sourceElo={rsChampionRating ?? null}
+                        sourceElo={rsChampionRating ?? (rsChampion?.rating as number | undefined) ?? null}
                       />
                     </div>
                   </div>
@@ -1854,7 +1854,7 @@ export default function LeaguePage() {
                       sourceStrategyLabel={
                         hhEvolutionData.members.find((m) => m.member_id === hhChampion?.member_id)?.strategy?.label ?? null
                       }
-                      sourceElo={hhChampionRating ?? null}
+                      sourceElo={hhChampionRating ?? (hhChampion?.rating as number | undefined) ?? null}
                     />
                   </div>
                 </div>
