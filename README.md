@@ -56,7 +56,7 @@ flowchart TD
     end
 
     subgraph Backend["Backend — FastAPI"]
-        API[REST API\n8 route modules]
+        API[REST API\n9 route modules]
         Runner[Experiment Runner\nasync]
         Pipeline[Pipeline Runner\nasync]
         Robustness[Robustness Runner\nasync]
@@ -460,7 +460,7 @@ pytest tests/integration/ -v
 pytest tests/ --cov=simulation --cov=backend --cov-report=term-missing
 ```
 
-**538 tests passing.** Zero failures.
+**587 tests passing.** Zero failures.
 
 **Unit coverage (22 modules):** `mixed_env`, `competitive_env`, `config_validation`, `agents`, `ppo_training`, `league_registry`, `league_ratings`, `league_sampling`, `league_selfplay`, `evaluation`, `robustness`, `reporting`, `metrics_collector`, `run_logger`, `pipeline_run`, `strategy_analysis`, PettingZoo adapter, seeding utilities, and more.
 
@@ -502,7 +502,8 @@ This is a **solo research project** under active development.
 - Next.js 14 dashboard with dark theme
 - WebSocket live metrics streaming
 - SSE replay streaming
-- 538 automated tests (22 unit + 4 integration modules)
+- 587 automated tests (22 unit + 4 integration modules)
+- Policy export — download trained agents as standalone Python modules
 - Cross-archetype transfer experiments with obs truncation/padding
 - Two deployment-readiness audits — all issues resolved
 

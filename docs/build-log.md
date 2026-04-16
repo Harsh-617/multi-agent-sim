@@ -749,3 +749,30 @@ Minor fixes (2 of 3 fixed, 1 renamed):
 - RS champion → Cooperative: +257.6% above random baseline (cooperation transfers across cooperative environments)
 - Mixed champion → Competitive: 0% above baseline (cooperative behavior is neutral in competitive)
 - Competitive champion → Mixed: -100% vs baseline (aggression actively hurts in cooperative environments)
+
+
+## Policy Export Feature
+
+### Phase 1: Design
+- Feature spec written in design/Policy_export.md
+- 5 ambiguities found and resolved (relative path, architecture drift, return signature standardization, 404 on missing policy.pt, Cooperative ratings row structure)
+
+### Phase 2: Implementation
+New files:
+- simulation/export/__init__.py
+- simulation/export/policy_exporter.py — generate_policy_py, generate_readme, build_export_zip
+- backend/api/routes_export.py — GET /api/export/{archetype}/champion and /members/{member_id}
+- tests/unit/test_policy_exporter.py — 35 unit tests
+- tests/integration/test_export_routes.py — 14 integration tests
+
+Modified files:
+- backend/main.py — export_router registered
+- frontend/src/lib/api.ts — downloadChampionPolicy, downloadMemberPolicy
+- frontend/src/app/league/page.tsx — Export Champion Policy button in Champion tab, download button per Ratings row
+
+Results: 587 tests passing (538 + 49 new), 0 failed, 0 TypeScript errors
+
+What the export contains:
+- policy.py — self-contained PolicyNetwork class + predict() function, no platform imports
+- policy.pt — raw PyTorch weights
+- README.md — usage instructions, obs schema, action mapping, reproducibility info

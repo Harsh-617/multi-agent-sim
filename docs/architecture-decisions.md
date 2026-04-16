@@ -377,3 +377,15 @@ Context: Transfer reports needed a storage location consistent with existing rob
 Decision: storage/reports/transfer_{src}_{tgt}_{hash}_{timestamp}/summary.json
 Reasoning: Follows the same pattern as cooperative reports (summary.json) and sits alongside other report types in the unified storage/reports/ directory.
 Consequences: Research page infers report type from directory name prefix. Transfer reports route to /research/transfer/[report_id] detail page.
+
+### ADR-022: Policy export embeds architecture in policy.py, no platform imports
+Context: Users need to run exported policies without installing the full platform.
+Decision: policy.py contains a complete copy of SharedPolicyNetwork embedded as a template string. No imports from simulation/ or backend/.
+Reasoning: A standalone file that only requires torch is maximally portable. Platform imports would force users to install the full dependency stack.
+Consequences: If SharedPolicyNetwork architecture changes, the embedded copy in policy_exporter.py must be updated manually. Architecture is frozen for V1 — this is acceptable.
+
+### ADR-023: Policy export generates zip on the fly, no storage
+Context: Export artifacts could be pre-generated and stored, or generated on demand.
+Decision: Zip is generated on the fly from existing policy.pt and metadata.json. No new storage.
+Reasoning: policy.pt already exists in league storage. Pre-generating zips would double the storage footprint with no benefit — users download infrequently.
+Consequences: Export endpoint has slight latency (~100ms) for zip generation. Acceptable for an infrequent operation.
