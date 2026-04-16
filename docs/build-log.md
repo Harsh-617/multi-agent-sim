@@ -714,3 +714,38 @@ Minor fixes (2 of 3 fixed, 1 renamed):
 - Home environments stat hardcoded — defined as ENVIRONMENT_COUNT constant
 - About removed from primary nav — nav now shows 3 items (Simulate, League, Research)
 - Sort label misleading — renamed from "Highest robustness score" to "Oldest first"
+
+
+## Transfer Experiment Feature
+
+### Phase 1: Design
+- Feature spec written in design/Transfer_experiment.md
+- 5 ambiguities found and resolved (primary metric per archetype, status stages, champion-only V1, report_type field, config filtering)
+
+### Phase 2: Implementation
+
+#### Step 1: Backend
+- simulation/transfer/__init__.py
+- simulation/transfer/transfer_runner.py — loads source policy, probes target obs dim, applies truncate/pad, runs N episodes for transferred policy and random baseline, saves summary.json
+- backend/api/routes_transfer.py — POST /api/transfer/run, GET /api/transfer/status/{id}, GET /api/transfer/reports, GET /api/transfer/reports/{report_id}
+- backend/main.py — registered transfer router
+- 38 new tests — total: 538 passing
+
+#### Step 2: Frontend
+- frontend/src/components/TransferExperiment.tsx — form, polling, results panel with obs mismatch note, vs baseline comparison
+- frontend/src/app/research/transfer/[report_id]/page.tsx — full report detail page
+- frontend/src/lib/api.ts — 4 new API functions, 4 new interfaces
+- frontend/src/app/league/page.tsx — TransferExperiment added to all three Champion tabs
+- frontend/src/app/research/page.tsx — Transfer filter option added
+
+#### Bugs fixed during testing:
+- CORS error — transfer API calls were bypassing Next.js proxy, fixed to use relative BASE path
+- Results panel not rendering — TransferStatus interface missing result field, fixed inline result parsing
+- Null safety — .toFixed() on null source_elo and vs_baseline_pct, fixed with null guards in both TransferExperiment.tsx and report detail page
+- Per-episode breakdown blank — was reading primary_metric field, fixed to use metricName key lookup
+- sourceElo showing — was not passing champion rating correctly, fixed to fall back to champion.rating
+
+#### Experimental findings (first transfer experiments run):
+- RS champion → Cooperative: +257.6% above random baseline (cooperation transfers across cooperative environments)
+- Mixed champion → Competitive: 0% above baseline (cooperative behavior is neutral in competitive)
+- Competitive champion → Mixed: -100% vs baseline (aggression actively hurts in cooperative environments)

@@ -357,3 +357,23 @@ Decisions made explicitly during Step B architecture design before implementatio
 
 **Consequences:**
 - `backend/api/routes_cooperative_reports.py` reads `summary.json`. This inconsistency should be normalized in a future cleanup — either rename cooperative to `report.json` or migrate Mixed/Competitive to `summary.json`.
+
+---
+
+### ADR-019: Transfer experiment uses truncate/pad for obs dimension mismatch
+Context: Each archetype's trained policy expects a fixed obs_dim stored in metadata.json. Target environments produce different obs shapes.
+Decision: If target obs > source expected: truncate. If target obs < source expected: zero-pad. Document clearly in UI.
+Reasoning: Learned projection matrices are more principled but require additional training. Truncate/pad is honest about what's happening and produces interpretable results — a policy operating with partial or zero-padded information is a valid research finding, not an engineering failure.
+Consequences: Results reflect raw generalization, not engineered compatibility. The UI prominently displays the obs mismatch strategy. Learned projection deferred to V2.
+
+### ADR-020: Transfer experiment is champion-only in V1
+Context: Any league member could theoretically be transferred, not just the champion.
+Decision: V1 only transfers the current Elo champion from each archetype.
+Reasoning: The champion is the most meaningful agent to transfer — it represents the best learned policy. Member-level transfer selection adds UI complexity before the core feature is validated.
+Consequences: sourceElo is derived from champion rating. Member-level selection deferred to V2.
+
+### ADR-021: Transfer reports stored under storage/reports/transfer_* 
+Context: Transfer reports needed a storage location consistent with existing robustness and eval reports.
+Decision: storage/reports/transfer_{src}_{tgt}_{hash}_{timestamp}/summary.json
+Reasoning: Follows the same pattern as cooperative reports (summary.json) and sits alongside other report types in the unified storage/reports/ directory.
+Consequences: Research page infers report type from directory name prefix. Transfer reports route to /research/transfer/[report_id] detail page.

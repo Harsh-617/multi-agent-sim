@@ -56,7 +56,7 @@ flowchart TD
     end
 
     subgraph Backend["Backend — FastAPI"]
-        API[REST API\n7 route modules]
+        API[REST API\n8 route modules]
         Runner[Experiment Runner\nasync]
         Pipeline[Pipeline Runner\nasync]
         Robustness[Robustness Runner\nasync]
@@ -117,6 +117,7 @@ multi-agent-sim/
 │   │   ├── routes_cooperative_league.py   # Cooperative league endpoints
 │   │   ├── routes_cooperative_pipeline.py # Cooperative pipeline endpoints
 │   │   ├── routes_cooperative_reports.py  # Cooperative report endpoints
+│   │   ├── routes_transfer.py             # Transfer experiment endpoints
 │   │   └── ws_metrics.py           # WebSocket live metrics streaming
 │   ├── pipeline/
 │   │   └── pipeline_manager.py     # Async pipeline orchestration
@@ -263,7 +264,7 @@ multi-agent-sim/
 │   │       └── api.ts              # API client utilities
 │   └── package.json
 │
-├── tests/                          # Test suite (500 tests)
+├── tests/                          # Test suite (538 tests)
 │   ├── unit/                       # Unit tests (22 modules)
 │   │   ├── test_mixed_env.py
 │   │   ├── test_competitive_env.py
@@ -459,7 +460,7 @@ pytest tests/integration/ -v
 pytest tests/ --cov=simulation --cov=backend --cov-report=term-missing
 ```
 
-**500 tests passing.** Zero failures.
+**538 tests passing.** Zero failures.
 
 **Unit coverage (22 modules):** `mixed_env`, `competitive_env`, `config_validation`, `agents`, `ppo_training`, `league_registry`, `league_ratings`, `league_sampling`, `league_selfplay`, `evaluation`, `robustness`, `reporting`, `metrics_collector`, `run_logger`, `pipeline_run`, `strategy_analysis`, PettingZoo adapter, seeding utilities, and more.
 
@@ -497,11 +498,12 @@ This is a **solo research project** under active development.
 - 20-variant robustness evaluation
 - K-means strategy clustering with 11 labeled archetypes
 - Full pipeline automation (one command, all three archetypes)
-- FastAPI backend (7 route modules, async task execution)
+- FastAPI backend (8 route modules, async task execution)
 - Next.js 14 dashboard with dark theme
 - WebSocket live metrics streaming
 - SSE replay streaming
-- 500 automated tests (22 unit + 4 integration modules)
+- 538 automated tests (22 unit + 4 integration modules)
+- Cross-archetype transfer experiments with obs truncation/padding
 - Two deployment-readiness audits — all issues resolved
 
 **Planned extensions:**
